@@ -43,6 +43,13 @@ window.PLANNING = {
       soort: "lkt",
       doelgroep: "alle",
       uitleg: "Landelijke kennistoets rekenen: de kennisbasis rekenen. Onderdeel van Eigen Vaardigheden C. Er zijn 2 kansen per studiejaar."
+    },
+    {
+      datum: "2027-01-11",
+      titel: "Begin tentamenweek P2",
+      soort: "toets",
+      doelgroep: "alle",
+      uitleg: "Vanaf deze week vinden de cursustoetsen van periode 2 plaats. Op welke dag welke toets is, is nog niet bekend."
     }
   ],
 

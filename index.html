@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pabo 3 Kalender</title>
+<meta name="description" content="Toetskalender Pabo jaar 3 (HAN, 2026–2027) met ruimte voor je eigen opdrachten.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='26' height='23' rx='4' fill='%232f5d8a'/><rect x='3' y='6' width='26' height='7' rx='3' fill='%23d2492a'/><circle cx='22' cy='22' r='3' fill='white'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="kop">
+    <div>
+      <h1>Pabo 3 Kalender</h1>
+      <p class="sub">HAN Pabo voltijd jaar 3 · <span id="schooljaar"></span>. De toetsen staan vast in de kalender. Je eigen opdrachten zet je er zelf bij.</p>
+    </div>
+    <div class="doelgroep" role="group" aria-label="Toon toetsen voor">
+      <button type="button" data-dg="alle">Alle</button>
+      <button type="button" data-dg="jk">Jongere kind</button>
+      <button type="button" data-dg="ok">Oudere kind</button>
+    </div>
+  </header>
+
+  <nav class="jaarstrook" id="jaarstrook" aria-label="Maanden"></nav>
+
+  <div class="layout">
+    <main class="kalender">
+      <div class="balk">
+        <button type="button" class="pijl" id="vorige" aria-label="Vorige maand">‹</button>
+        <h2 id="maandtitel"></h2>
+        <button type="button" class="pijl" id="volgende" aria-label="Volgende maand">›</button>
+        <button type="button" class="zacht" id="naarVandaag">Vandaag</button>
+        <button type="button" class="hoofd" id="nieuw">+ Opdracht</button>
+      </div>
+      <div class="grid-scroll">
+        <div class="grid" id="grid" role="grid"></div>
+      </div>
+      <ul class="legenda" aria-label="Legenda">
+        <li><i class="kl-lkt"></i>Landelijke kennistoets</li>
+        <li><i class="kl-toets"></i>Cursustoets</li>
+        <li><i class="kl-periode"></i>Start periode</li>
+        <li><i class="kl-vakantie"></i>Vakantie</li>
+        <li><i class="kl-opdracht"></i>Opdracht</li>
+        <li><i class="kl-deadline"></i>Deadline</li>
+        <li><i class="kl-herkansing"></i>Herkansing</li>
+      </ul>
+    </main>
+
+    <aside class="zij">
+      <section class="paneel" id="dagpaneel" aria-live="polite"></section>
+
+      <section class="paneel">
+        <h3>Mijn opdrachten</h3>
+        <ul class="lijst" id="mijnlijst"></ul>
+      </section>
+
+      <section class="paneel">
+        <h3>Toetsen zonder vaste datum</h3>
+        <p class="klein">Volgens het overzicht vallen deze in periode 2. De data volgen nog.</p>
+        <ul class="lijst" id="zonderdatum"></ul>
+      </section>
+
+      <section class="paneel">
+        <h3>Opslaan en back-up</h3>
+        <p class="klein" id="opslagtekst">Je eigen opdrachten worden alleen in deze browser op dit apparaat bewaard. Anderen zien ze niet. Maak een back-up als je wilt wisselen van apparaat.</p>
+        <div class="knoppen">
+          <button type="button" class="zacht" id="exporteer">Back-up downloaden</button>
+          <label class="zacht knop-label" for="importeer">Back-up terugzetten</label>
+          <input type="file" id="importeer" accept="application/json,.json" hidden>
+        </div>
+        <p class="klein melding" id="melding" role="status"></p>
+      </section>
+    </aside>
+  </div>
+
+  <footer class="voet">
+    Bron: Conceptoverzicht OWE's Kernfase Voltijd jaar 3 (26-27) en het <a href="https://www.han.nl/studeren/jaarrooster/" target="_blank" rel="noopener">HAN-jaarrooster</a>. Het overzicht is een concept: check data altijd in Osiris.
+  </footer>
+</div>
+
+<dialog id="venster" aria-labelledby="venstertitel">
+  <form id="formulier" novalidate>
+    <h3 id="venstertitel">Opdracht toevoegen</h3>
+    <label for="f-titel">Titel</label>
+    <input id="f-titel" name="titel" type="text" maxlength="80" required placeholder="Bijv. Lesvoorbereiding rekenen inleveren">
+    <div class="twee">
+      <div>
+        <label for="f-datum">Datum</label>
+        <input id="f-datum" name="datum" type="date" required>
+      </div>
+      <div>
+        <label for="f-soort">Soort</label>
+        <select id="f-soort" name="soort">
+          <option value="opdracht">Opdracht</option>
+          <option value="deadline">Deadline</option>
+          <option value="herkansing">Herkansing</option>
+          <option value="overig">Overig</option>
+        </select>
+      </div>
+    </div>
+    <label for="f-notitie">Notitie <span class="klein">(optioneel)</span></label>
+    <textarea id="f-notitie" name="notitie" rows="3" maxlength="400"></textarea>
+    <label class="vink"><input id="f-klaar" name="klaar" type="checkbox"> Afgerond</label>
+    <p class="fout" id="f-fout" role="alert"></p>
+    <div class="knoppen eind">
+      <button type="button" class="gevaar" id="f-verwijder" hidden>Verwijderen</button>
+      <span class="ruimte"></span>
+      <button type="button" class="zacht" id="f-annuleer">Annuleren</button>
+      <button type="submit" class="hoofd">Opslaan</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="toetsen.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,7 +1,10 @@
 /*
   Pabo 3 Kalender
   - Vaste toetsen, periodes en vakanties komen uit toetsen.js.
-  - Eigen opdrachten worden bewaard in localStorage (alleen in deze browser).
+  - Zonder account: eigen opdrachten staan in localStorage (alleen in deze browser).
+  - Met account (gebruikersnaam + pincode): opdrachten staan online in Supabase
+    (zie cloud.js) en zijn op elk apparaat te zien. Een kopie blijft in de browser,
+    zodat de kalender ook zonder internet te bekijken is.
 */
 (function () {
   "use strict";
@@ -9,6 +12,10 @@
   const P = window.PLANNING;
   const OPSLAG = "pabo3-kalender-opdrachten-v1";
   const VOORKEUR = "pabo3-kalender-voorkeur-v1";
+  const SESSIE = "pabo3-kalender-sessie-v1";
+  const CACHE = "pabo3-kalender-cache-v1:";
+  const WACHT = "pabo3-kalender-wacht-v1:";
+  const EIGEN_SOORTEN = ["opdracht", "deadline", "herkansing", "toets", "overig"];
 
   const MAANDEN = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
   const KORT = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
@@ -46,9 +53,26 @@
     catch (e) { opslagWerkt = false; return false; }
   }
 
+  const hoofd = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  function weg(sleutel) { try { localStorage.removeItem(sleutel); } catch (e) { /* niets */ } }
+
   // ---------- toestand ----------
-  let opdrachten = laad(OPSLAG, []);
-  if (!Array.isArray(opdrachten)) opdrachten = [];
+  // sessie = { naam, token, faceid } als je bent ingelogd (faceid = sleutel-id of null)
+  let sessie = laad(SESSIE, null);
+  if (!sessie || typeof sessie.token !== "string" || typeof sessie.naam !== "string") sessie = null;
+  if (!window.CLOUD || !CLOUD.aan) sessie = null;
+  let ontgrendeld = !!sessie && !sessie.faceid;
+  const actief = () => !!sessie && ontgrendeld;
+
+  let opdrachten = [];
+  function laadEigen() {
+    if (actief()) opdrachten = laad(CACHE + sessie.naam, []);
+    else if (sessie) opdrachten = [];            // vergrendeld: niets tonen
+    else opdrachten = laad(OPSLAG, []);
+    if (!Array.isArray(opdrachten)) opdrachten = [];
+  }
+  laadEigen();
+
   let voorkeur = laad(VOORKEUR, { doelgroep: "alle" });
 
   const nu = new Date();
@@ -219,12 +243,26 @@
     tekenDagpaneel();
     tekenMijnLijst();
     tekenZonderDatum();
+    tekenAccount();
+    $("opslagtekst").textContent = actief()
+      ? "Je opdrachten staan online in je account. Log op een ander apparaat in met dezelfde gebruikersnaam en pincode om ze daar te zien. Een back-up downloaden kan nog steeds."
+      : "Je eigen opdrachten worden alleen in deze browser op dit apparaat bewaard. Anderen zien ze niet. Log in om ze op al je apparaten te zien, of maak een back-up.";
     if (!opslagWerkt) $("opslagtekst").innerHTML = '<strong class="te-laat">Let op:</strong> deze browser staat opslaan niet toe (bijvoorbeeld een privévenster). Je opdrachten verdwijnen als je de pagina sluit.';
   }
 
   // ---------- opslaan ----------
-  function opslaan() {
-    bewaar(OPSLAG, opdrachten);
+  // gewijzigd = id's die nieuw of aangepast zijn, verwijderd = id's die weg zijn.
+  function opslaan(gewijzigd, verwijderd) {
+    if (actief()) {
+      bewaar(CACHE + sessie.naam, opdrachten);
+      const w = wachtrij(sessie.naam);
+      (gewijzigd || []).forEach((id) => { w.verwijder = w.verwijder.filter((x) => x !== id); if (!w.bewaar.includes(id)) w.bewaar.push(id); });
+      (verwijderd || []).forEach((id) => { w.bewaar = w.bewaar.filter((x) => x !== id); if (!w.verwijder.includes(id)) w.verwijder.push(id); });
+      bewaar(WACHT + sessie.naam, w);
+      synchroniseer();
+    } else {
+      bewaar(OPSLAG, opdrachten);
+    }
     tekenAlles();
   }
   function nieuwId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -234,6 +272,13 @@
   let verwijderStap = 0;
 
   function openVenster(id, datum) {
+    if (sessie && !ontgrendeld) {
+      accountMelding = "Ontgrendel eerst je account om opdrachten toe te voegen of te wijzigen.";
+      tekenAccount();
+      const k = document.querySelector("#account [data-actie]");
+      if (k) { k.focus(); k.scrollIntoView({ block: "center", behavior: "smooth" }); }
+      return;
+    }
     bewerkId = id || null;
     verwijderStap = 0;
     const o = id ? opdrachten.find((x) => x.id === id) : null;
@@ -258,24 +303,27 @@
     if (!titel) { $("f-fout").textContent = "Vul een titel in."; $("f-titel").focus(); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) { $("f-fout").textContent = "Kies een datum."; $("f-datum").focus(); return; }
     const gegevens = { titel, datum, soort: $("f-soort").value, notitie: $("f-notitie").value.trim(), klaar: $("f-klaar").checked };
+    let id = bewerkId;
     if (bewerkId) {
       const o = opdrachten.find((x) => x.id === bewerkId);
       if (o) Object.assign(o, gegevens);
     } else {
-      opdrachten.push(Object.assign({ id: nieuwId() }, gegevens));
+      id = nieuwId();
+      opdrachten.push(Object.assign({ id }, gegevens));
     }
     gekozen = datum;
     const d = ontleed(datum);
     maand = { j: d.getFullYear(), m: d.getMonth() };
     sluitVenster();
-    opslaan();
+    opslaan([id]);
   });
   $("f-annuleer").addEventListener("click", sluitVenster);
   $("f-verwijder").addEventListener("click", () => {
     if (verwijderStap === 0) { verwijderStap = 1; $("f-verwijder").textContent = "Zeker weten? Klik nogmaals"; return; }
-    opdrachten = opdrachten.filter((x) => x.id !== bewerkId);
+    const id = bewerkId;
+    opdrachten = opdrachten.filter((x) => x.id !== id);
     sluitVenster();
-    opslaan();
+    opslaan([], [id]);
   });
 
   // ---------- klikken ----------
@@ -312,7 +360,7 @@
     if (t.dataset.nieuw) return openVenster(null, t.dataset.nieuw);
     if (t.dataset.bewerk) return openVenster(t.dataset.bewerk);
     const o = opdrachten.find((x) => x.id === t.dataset.klaar);
-    if (o) { o.klaar = !o.klaar; opslaan(); }
+    if (o) { o.klaar = !o.klaar; opslaan([o.id]); }
   });
 
   $("jaarstrook").addEventListener("click", (e) => {
@@ -350,18 +398,21 @@
     if (!bestand) return;
     const lezer = new FileReader();
     lezer.onload = () => {
+      if (sessie && !ontgrendeld) { meld("Ontgrendel eerst je account."); e.target.value = ""; return; }
       try {
         const data = JSON.parse(lezer.result);
         const lijst = Array.isArray(data) ? data : data.opdrachten;
         if (!Array.isArray(lijst)) throw new Error("geen lijst");
         let erbij = 0;
+        const ids = [];
         lijst.forEach((o) => {
           if (!o || typeof o.titel !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(o.datum || "")) return;
-          const schoon = { id: String(o.id || nieuwId()), titel: o.titel.slice(0, 80), datum: o.datum, soort: SOORT_LABEL[o.soort] && ["opdracht", "deadline", "herkansing", "overig"].includes(o.soort) ? o.soort : "opdracht", notitie: String(o.notitie || "").slice(0, 400), klaar: !!o.klaar };
+          const schoon = { id: String(o.id || nieuwId()), titel: o.titel.slice(0, 80), datum: o.datum, soort: EIGEN_SOORTEN.includes(o.soort) ? o.soort : "opdracht", notitie: String(o.notitie || "").slice(0, 400), klaar: !!o.klaar };
           const bestaand = opdrachten.findIndex((x) => x.id === schoon.id);
           if (bestaand >= 0) opdrachten[bestaand] = schoon; else { opdrachten.push(schoon); erbij++; }
+          ids.push(schoon.id);
         });
-        opslaan();
+        opslaan(ids);
         meld("Back-up teruggezet: " + erbij + " nieuwe opdrachten toegevoegd.");
       } catch (err) {
         meld("Dit bestand is geen geldige back-up van de Pabo 3 Kalender. Kies het .json-bestand dat je eerder hebt gedownload.");
@@ -371,7 +422,313 @@
     lezer.readAsText(bestand);
   });
 
+  // ---------- account: online opslaan ----------
+  let accountMelding = "";
+  let accountFout = false;
+  let formModus = "inloggen";      // "inloggen" of "registreren"
+  let toonPinFormulier = false;    // bij vergrendeld account: toch met pincode inloggen
+  let bezigMetVerzoek = false;
+  let syncStatus = "";             // "", "bezig", "ok", "fout"
+  let bioMogelijk = false;
+  let uitlogStap = 0;
+  let ingevuldeNaam = "";          // wat je in het naamveld typte, blijft staan na een foutmelding
+
+  function wachtrij(naam) {
+    const w = laad(WACHT + naam, null);
+    return w && Array.isArray(w.bewaar) && Array.isArray(w.verwijder) ? w : { bewaar: [], verwijder: [] };
+  }
+  const wachtrijLeeg = (naam) => { const w = wachtrij(naam); return !w.bewaar.length && !w.verwijder.length; };
+
+  function controleer(r) {
+    if (r && r.ok) return r;
+    if (r && r.sessie === false) { const f = new Error("sessie"); f.verlopen = true; throw f; }
+    throw new Error((r && r.fout) || "Er ging iets mis.");
+  }
+
+  function sessieVerlopen() {
+    // Inlogbewijs is verlopen: opnieuw inloggen. De wachtrij blijft bewaard en wordt
+    // na het inloggen alsnog verstuurd.
+    const naam = sessie ? sessie.naam : "";
+    const faceid = sessie ? sessie.faceid : null;
+    sessie = null;
+    weg(SESSIE);
+    ontgrendeld = false;
+    laadEigen();
+    formModus = "inloggen";
+    accountMelding = "Je inlog is verlopen. Log opnieuw in met je pincode.";
+    accountFout = true;
+    vorigeNaam = naam;
+    vorigeFaceid = faceid;
+    tekenAlles();
+  }
+  let vorigeNaam = "";
+  let vorigeFaceid = null;
+
+  let syncBezig = false;
+  let syncNogEens = false;
+  async function synchroniseer() {
+    if (!actief()) return;
+    if (syncBezig) { syncNogEens = true; return; }
+    const naam = sessie.naam;
+    const token = sessie.token;
+    const w = wachtrij(naam);
+    if (!w.bewaar.length && !w.verwijder.length) { syncStatus = "ok"; tekenAccount(); return; }
+
+    syncBezig = true;
+    syncStatus = "bezig";
+    tekenAccount();
+    bewaar(WACHT + naam, { bewaar: [], verwijder: [] });   // wat nu verandert, komt in een nieuwe ronde
+    try {
+      const lijst = opdrachten.filter((o) => w.bewaar.includes(o.id));
+      for (let i = 0; i < lijst.length; i += 200) controleer(await CLOUD.bewaar(token, lijst.slice(i, i + 200)));
+      for (const id of w.verwijder) controleer(await CLOUD.verwijder(token, id));
+      syncStatus = "ok";
+    } catch (fout) {
+      // terugzetten in de wachtrij, zodat het later opnieuw geprobeerd wordt
+      const nu = wachtrij(naam);
+      w.bewaar.forEach((id) => { if (!nu.bewaar.includes(id) && !nu.verwijder.includes(id)) nu.bewaar.push(id); });
+      w.verwijder.forEach((id) => { if (!nu.bewaar.includes(id) && !nu.verwijder.includes(id)) nu.verwijder.push(id); });
+      bewaar(WACHT + naam, nu);
+      syncStatus = "fout";
+      syncBezig = false;
+      if (fout.verlopen) return sessieVerlopen();
+      tekenAccount();
+      return;
+    }
+    syncBezig = false;
+    if (syncNogEens) { syncNogEens = false; return synchroniseer(); }
+    tekenAccount();
+  }
+
+  // Wijzigingen versturen en daarna de lijst van de server ophalen (bijv. van je andere apparaat).
+  async function vernieuw() {
+    if (!actief()) return;
+    await synchroniseer();
+    if (!actief() || !wachtrijLeeg(sessie.naam)) return;   // eerst onverstuurde wijzigingen kwijt
+    try {
+      const r = controleer(await CLOUD.lijst(sessie.token));
+      if (!actief() || !wachtrijLeeg(sessie.naam)) return;
+      opdrachten = Array.isArray(r.opdrachten) ? r.opdrachten : [];
+      bewaar(CACHE + sessie.naam, opdrachten);
+      syncStatus = "ok";
+      tekenAlles();
+    } catch (fout) {
+      if (fout.verlopen) return sessieVerlopen();
+      syncStatus = "fout";
+      tekenAccount();
+    }
+  }
+
+  async function naInloggen(r) {
+    const faceid = (sessie && sessie.naam === r.naam && sessie.faceid) || (vorigeNaam === r.naam ? vorigeFaceid : null) || null;
+    sessie = { naam: r.naam, token: r.token, faceid };
+    bewaar(SESSIE, sessie);
+    ontgrendeld = true;
+    toonPinFormulier = false;
+    vorigeNaam = ""; vorigeFaceid = null; ingevuldeNaam = "";
+
+    // Serverlijst + eventuele onverstuurde wijzigingen van eerder op dit apparaat
+    const cache = laad(CACHE + r.naam, []);
+    const w = wachtrij(r.naam);
+    let lijst = Array.isArray(r.opdrachten) ? r.opdrachten : [];
+    lijst = lijst.filter((o) => !w.verwijder.includes(o.id));
+    (Array.isArray(cache) ? cache : []).forEach((o) => {
+      if (!w.bewaar.includes(o.id)) return;
+      const i = lijst.findIndex((x) => x.id === o.id);
+      if (i >= 0) lijst[i] = o; else lijst.push(o);
+    });
+
+    // Opdrachten die je zonder account op dit apparaat had, gaan mee naar je account
+    const lokaal = laad(OPSLAG, []);
+    let meegenomen = 0;
+    if (Array.isArray(lokaal) && lokaal.length) {
+      lokaal.forEach((o) => {
+        if (!o || !o.id) return;
+        const i = lijst.findIndex((x) => x.id === o.id);
+        if (i >= 0) lijst[i] = o; else lijst.push(o);
+        if (!w.bewaar.includes(o.id)) w.bewaar.push(o.id);
+        meegenomen++;
+      });
+      bewaar(WACHT + r.naam, w);
+      bewaar(OPSLAG, []);
+    }
+
+    opdrachten = lijst;
+    bewaar(CACHE + r.naam, opdrachten);
+    accountFout = false;
+    accountMelding = meegenomen
+      ? meegenomen + " opdracht" + (meegenomen === 1 ? " van dit apparaat is" : "en van dit apparaat zijn") + " aan je account toegevoegd."
+      : "";
+    tekenAlles();
+    await synchroniseer();
+  }
+
+  async function verstuurFormulier(modus) {
+    if (bezigMetVerzoek) return;
+    const naam = ($("acc-naam").value || "").trim().toLowerCase();
+    const pin = ($("acc-pin").value || "").trim();
+    const fout = (t, veld) => { accountMelding = t; accountFout = true; tekenAccount(); const v = $(veld); if (v) v.focus(); };
+    if (!/^[a-z0-9]{3,20}$/.test(naam)) return fout("Gebruikersnaam: 3 tot 20 letters of cijfers, zonder spaties.", "acc-naam");
+    if (!/^\d{4}$/.test(pin)) return fout("De pincode bestaat uit precies 4 cijfers.", "acc-pin");
+    if (modus === "registreren") {
+      const herhaal = ($("acc-pin2") ? $("acc-pin2").value : "").trim();
+      if (herhaal !== pin) return fout("De twee pincodes zijn niet hetzelfde.", "acc-pin2");
+    }
+    bezigMetVerzoek = true;
+    accountMelding = modus === "registreren" ? "Account maken…" : "Inloggen…";
+    accountFout = false;
+    tekenAccount(naam);
+    try {
+      const r = await (modus === "registreren" ? CLOUD.registreer(naam, pin) : CLOUD.inloggen(naam, pin));
+      bezigMetVerzoek = false;
+      if (!r || !r.ok) return fout((r && r.fout) || "Inloggen is niet gelukt.", "acc-pin");
+      await naInloggen(r);
+    } catch (e) {
+      bezigMetVerzoek = false;
+      fout(e.message || "Er ging iets mis.", "acc-naam");
+    }
+  }
+
+  async function ontgrendel() {
+    if (!sessie || !sessie.faceid) return;
+    try {
+      const gelukt = await BIO.controleer(sessie.faceid);
+      if (!gelukt) throw new Error("niet geverifieerd");
+      ontgrendeld = true;
+      accountMelding = ""; accountFout = false;
+      laadEigen();
+      tekenAlles();
+      vernieuw();
+    } catch (e) {
+      accountMelding = "Ontgrendelen met " + BIO.naam + " is niet gelukt. Probeer het opnieuw of log in met je pincode.";
+      accountFout = true;
+      tekenAccount();
+    }
+  }
+
+  async function bioAanzetten() {
+    if (!actief()) return;
+    try {
+      const id = await BIO.aanzetten(sessie.naam);
+      sessie.faceid = id;
+      bewaar(SESSIE, sessie);
+      accountMelding = hoofd(BIO.naam) + " staat aan. Als je de kalender op dit apparaat opent, ontgrendel je met " + BIO.naam + ".";
+      accountFout = false;
+    } catch (e) {
+      accountMelding = hoofd(BIO.naam) + " aanzetten is niet gelukt of geannuleerd.";
+      accountFout = true;
+    }
+    tekenAccount();
+  }
+
+  function bioUitzetten() {
+    if (!sessie) return;
+    sessie.faceid = null;
+    bewaar(SESSIE, sessie);
+    accountMelding = hoofd(BIO.naam) + " staat uit op dit apparaat.";
+    accountFout = false;
+    tekenAccount();
+  }
+
+  async function uitloggen() {
+    if (!sessie) return;
+    if (ontgrendeld && !wachtrijLeeg(sessie.naam) && uitlogStap === 0) {
+      uitlogStap = 1;
+      accountMelding = "Er zijn nog wijzigingen die niet online staan. Klik nogmaals op Uitloggen om ze te laten vervallen.";
+      accountFout = true;
+      return tekenAccount();
+    }
+    const { naam, token } = sessie;
+    CLOUD.uitloggen(token).catch(() => {});
+    weg(SESSIE); weg(CACHE + naam); weg(WACHT + naam);
+    sessie = null; ontgrendeld = false; uitlogStap = 0;
+    syncStatus = ""; formModus = "inloggen";
+    accountMelding = "Je bent uitgelogd. Je opdrachten staan veilig online.";
+    accountFout = false;
+    laadEigen();
+    tekenAlles();
+  }
+
+  function tekenAccount(vulNaam) {
+    const el = $("account");
+    if (!el) return;
+    if (!window.CLOUD || !CLOUD.aan) { el.hidden = true; return; }
+    el.hidden = false;
+    const melding = accountMelding ? '<p class="klein acc-melding' + (accountFout ? " te-laat" : "") + '" role="status">' + esc(accountMelding) + "</p>" : "";
+
+    // 1. Ingelogd en ontgrendeld
+    if (actief()) {
+      const status = { bezig: "Bezig met opslaan…", ok: "Alles staat online.", fout: "Niet alles staat online. Wordt opnieuw geprobeerd zodra er verbinding is." }[syncStatus] || "";
+      el.innerHTML = '<div class="dagkop"><h3>Mijn account</h3><span class="label">Online</span></div>' +
+        '<p class="klein">Ingelogd als <strong>' + esc(sessie.naam) + "</strong>." + (status ? " " + esc(status) : "") + "</p>" +
+        melding +
+        '<div class="knoppen">' +
+        (bioMogelijk ? (sessie.faceid
+          ? '<button type="button" class="zacht" data-actie="bio-uit">' + esc(hoofd(BIO.naam)) + " uitzetten</button>"
+          : '<button type="button" class="zacht" data-actie="bio-aan">' + esc(hoofd(BIO.naam)) + " aanzetten</button>") : "") +
+        '<button type="button" class="zacht" data-actie="uitloggen">Uitloggen</button></div>';
+      return;
+    }
+
+    // 2. Ingelogd maar vergrendeld (Face ID staat aan)
+    if (sessie && !toonPinFormulier) {
+      el.innerHTML = '<div class="dagkop"><h3>Mijn account</h3><span class="label">Vergrendeld</span></div>' +
+        '<p class="klein">Ingelogd als <strong>' + esc(sessie.naam) + "</strong>. Ontgrendel om je opdrachten te zien.</p>" +
+        melding +
+        '<div class="knoppen"><button type="button" class="hoofd" data-actie="ontgrendel">Ontgrendel met ' + esc(BIO.naam) + "</button>" +
+        '<button type="button" class="zacht" data-actie="toon-pin">Pincode gebruiken</button></div>';
+      return;
+    }
+
+    // 3. Inloggen of account maken
+    const reg = formModus === "registreren";
+    const naamWaarde = vulNaam || ingevuldeNaam || (sessie ? sessie.naam : vorigeNaam) || "";
+    el.innerHTML = '<div class="dagkop"><h3>' + (reg ? "Account maken" : "Inloggen") + '</h3><span class="label">Optioneel</span></div>' +
+      '<p class="klein">' + (reg
+        ? "Kies een gebruikersnaam en een pincode van 4 cijfers. Onthoud je pincode goed."
+        : "Log in om je opdrachten op al je apparaten te zien. Zonder account blijven ze alleen in deze browser.") + "</p>" +
+      '<form id="acc-form" class="acc-form" novalidate>' +
+      '<label for="acc-naam">Gebruikersnaam</label>' +
+      '<input id="acc-naam" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="20" value="' + esc(naamWaarde) + '">' +
+      '<label for="acc-pin">Pincode</label>' +
+      '<input id="acc-pin" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="' + (reg ? "new-password" : "current-password") + '">' +
+      (reg ? '<label for="acc-pin2">Herhaal pincode</label><input id="acc-pin2" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password">' : "") +
+      melding +
+      '<div class="knoppen"><button type="submit" class="hoofd"' + (bezigMetVerzoek ? " disabled" : "") + ">" + (reg ? "Account maken" : "Inloggen") + "</button>" +
+      '<button type="button" class="zacht" data-actie="wissel">' + (reg ? "Ik heb al een account" : "Nieuw account") + "</button>" +
+      (sessie ? '<button type="button" class="zacht" data-actie="toon-bio">Terug</button>' : "") +
+      "</div></form>";
+  }
+
+  $("account").addEventListener("submit", (e) => {
+    e.preventDefault();
+    verstuurFormulier(formModus);
+  });
+  $("account").addEventListener("input", (e) => {
+    if (e.target.classList.contains("pin")) e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4);
+    if (e.target.id === "acc-naam") ingevuldeNaam = e.target.value;
+  });
+  $("account").addEventListener("click", (e) => {
+    const k = e.target.closest("[data-actie]");
+    if (!k) return;
+    const actie = k.dataset.actie;
+    if (actie !== "uitloggen") uitlogStap = 0;
+    if (actie === "wissel") { formModus = formModus === "registreren" ? "inloggen" : "registreren"; accountMelding = ""; tekenAccount($("acc-naam") ? $("acc-naam").value : ""); }
+    else if (actie === "ontgrendel") ontgrendel();
+    else if (actie === "toon-pin") { toonPinFormulier = true; formModus = "inloggen"; accountMelding = ""; tekenAccount(); }
+    else if (actie === "toon-bio") { toonPinFormulier = false; accountMelding = ""; tekenAccount(); }
+    else if (actie === "bio-aan") bioAanzetten();
+    else if (actie === "bio-uit") bioUitzetten();
+    else if (actie === "uitloggen") uitloggen();
+  });
+
+  // Opnieuw ophalen als je terugkomt naar de pagina of weer online bent
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") vernieuw(); });
+  window.addEventListener("online", () => vernieuw());
+
   // ---------- start ----------
   $("schooljaar").textContent = "studiejaar " + P.schooljaar;
   tekenAlles();
+  if (window.BIO) BIO.beschikbaar().then((ja) => { bioMogelijk = ja; tekenAccount(); });
+  vernieuw();
 })();

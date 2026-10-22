@@ -8,9 +8,28 @@ Toetskalender voor HAN Pabo voltijd jaar 3 (studiejaar 2026–2027).
 
 ## Waar worden mijn opdrachten bewaard?
 
-Alleen in je eigen browser, op je eigen apparaat. Klasgenoten zien jouw opdrachten niet, en jij ziet die van hen niet.
-Wissel je van laptop naar telefoon? Gebruik dan **Back-up downloaden** en op het andere apparaat **Back-up terugzetten**.
+**Zonder account:** alleen in je eigen browser, op je eigen apparaat. Klasgenoten zien jouw opdrachten niet, en jij ziet die van hen niet.
+Wissel je van apparaat? Gebruik dan **Back-up downloaden** en op het andere apparaat **Back-up terugzetten**.
 Let op: als je je browsergegevens wist, ben je je opdrachten kwijt zonder back-up.
+
+**Met account (optioneel):** maak rechts in het paneel **Inloggen** een account met een gebruikersnaam en een pincode van 4 cijfers.
+Je opdrachten staan dan online en je ziet ze op elk apparaat waar je inlogt. Opdrachten die je al zonder account had, gaan automatisch mee.
+
+- Na 5 foute pincodes wordt een account 15 minuten geblokkeerd.
+- Een pincode van 4 cijfers is geen sterke beveiliging. Zet er dus alleen studieplanning in, niets persoonlijks.
+- Pincode vergeten? Er is geen herstelknop. De beheerder kan je account in Supabase verwijderen, zodat je opnieuw kunt beginnen.
+
+**Face ID (iPhone) / vingerafdruk:** na het inloggen kun je in het accountpaneel Face ID aanzetten.
+Open je de kalender daarna op dat apparaat, dan ontgrendel je met Face ID in plaats van je pincode.
+Dit werkt alleen op de echte website (https), niet als je `index.html` als bestand opent.
+
+## Online opslag instellen (beheerder)
+
+1. Open in Supabase je project > **SQL Editor** > **New query**.
+2. Plak de inhoud van `supabase.sql` en klik op **Run**. Eén keer is genoeg.
+3. Zet in `cloud.js` de project-URL en de **publishable key** (Project Settings > API Keys).
+
+Wil je online opslaan uitzetten? Maak `SLEUTEL` in `cloud.js` leeg (`""`). De kalender werkt dan weer alleen met opslag in de browser.
 
 ## Toetsdata aanpassen
 
@@ -28,6 +47,8 @@ Alle vaste gegevens staan in **`toetsen.js`**. Zodra een toetsdatum bekend is:
 | `style.css` | Opmaak |
 | `app.js` | Werking van de kalender |
 | `toetsen.js` | Toetsen, periodes en vakanties (hier pas je data aan) |
+| `cloud.js` | Verbinding met Supabase (inloggen, online opslaan) en Face ID |
+| `supabase.sql` | Database-opzet voor Supabase (één keer uitvoeren) |
 
 ## Bronnen
 

@@ -3,7 +3,7 @@
   Eerst het netwerk (zodat je altijd de nieuwste versie krijgt), bij geen verbinding de opgeslagen kopie.
   Verhoog VERSIE als je bestanden toevoegt aan BESTANDEN.
 */
-const VERSIE = "digigenda-v2";
+const VERSIE = "digigenda-20261022b";
 const BESTANDEN = [
   "./", "index.html", "style.css", "app.js", "parse.js", "cloud.js", "toetsen.js", "manifest.webmanifest",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"

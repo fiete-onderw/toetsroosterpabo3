@@ -38,6 +38,8 @@ window.CLOUD = (function () {
     uitloggen: (token) => rpc("kal_uitloggen", { p_token: token }),
     instellingen: (token, inst) => rpc("kal_instellingen", { p_token: token, p_instellingen: inst }),
     agendaLink: (token, nieuw) => rpc("kal_agenda_link", { p_token: token, p_nieuw: !!nieuw }),
+    pinWijzigen: (token, oud, nieuw) => rpc("kal_pin_wijzigen", { p_token: token, p_oud: oud, p_nieuw: nieuw }),
+    uitloggenOveral: (token) => rpc("kal_uitloggen_overal", { p_token: token }),
     // Adres voor het agenda-abonnement (iPhone/Mac Agenda, Google Agenda)
     agendaUrl: (code) => URL + "/functions/v1/digigenda-agenda?code=" + encodeURIComponent(code)
   };

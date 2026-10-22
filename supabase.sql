@@ -335,30 +335,122 @@ revoke all on all functions in schema kalender from public, anon, authenticated;
 revoke all on function public.kal_instellingen(uuid, jsonb), public.kal_agenda_link(uuid, boolean), public.kal_ics_data(text) from public;
 grant execute on function public.kal_instellingen(uuid, jsonb), public.kal_agenda_link(uuid, boolean), public.kal_ics_data(text) to anon, authenticated;
 
--- ---------- Studieplanning casustoets Taal jongere kind (voor gebruikersnaam "gijs") ----------
--- Verschijnt automatisch zodra "gijs" een account maakt of inlogt.
-insert into kalender.klaarzetten (naam, opdracht)
-select 'gijs', x::jsonb from unnest(array[
-'{"id":"tjk-2210a","datum":"2026-10-22","soort":"opdracht","titel":"Regelen: boeken TL en HO + docent mailen over HO 2.9 en H8","notitie":"Zonder TL en HO werkt de planning vanaf zaterdag niet."}',
-'{"id":"tjk-2210b","datum":"2026-10-22","soort":"opdracht","titel":"Lezen: RT 6.2.2 (jeugdliteratuur)","notitie":"Begrippenkaart per paragraaf: definitie, wat het níét is, voorbeeld uit de klas."}',
-'{"id":"tjk-2310a","datum":"2026-10-23","soort":"opdracht","titel":"Lezen: P 12.4 · RT 5.2.4 · RT 3.2.2 · P 6.1.2 · P 6.3","notitie":"Criteria 8, 5 en 6. Plus 15 min begrippen afbakenen."}',
-'{"id":"tjk-2310b","datum":"2026-10-23","soort":"opdracht","titel":"Casus 2 (meester Rik) opnieuw maken met het stappenplan","notitie":"Eerst je lijstje met feiten uit de casus, dan pas schrijven."}',
-'{"id":"tjk-2410a","datum":"2026-10-24","soort":"opdracht","titel":"Lezen: RT 5.2.1–5.2.3 · TL H4","notitie":"Criteria 1, 2 en 3. Maak de niet-lijst van alle begrippenparen. Plus 15 min begrippen afbakenen."}',
-'{"id":"tjk-2410b","datum":"2026-10-24","soort":"opdracht","titel":"Casus 1 (juf Anouk) opnieuw maken","notitie":""}',
-'{"id":"tjk-2510a","datum":"2026-10-25","soort":"opdracht","titel":"Lezen: RT 5.3.1 · TL H2 · TL 3.6 · TL 6.1–6.3 · TL 6.6","notitie":"Criterium 4, deel 1. Begrippenkaart leesles. Plus 15 min begrippen afbakenen."}',
-'{"id":"tjk-2610a","datum":"2026-10-26","soort":"opdracht","titel":"Lezen: TL H5 (heel) · P 6.2.1 · P 6.2.2","notitie":"Criteria 4 en 7. Plus 15 min begrippen afbakenen."}',
-'{"id":"tjk-2610b","datum":"2026-10-26","soort":"opdracht","titel":"Casus: een leesles beoordelen (vraag aan Claude)","notitie":""}',
-'{"id":"tjk-2710a","datum":"2026-10-27","soort":"opdracht","titel":"Lezen: HO H1–H3 · HO 4.1–4.6","notitie":"Criteria 9 en 10. Tabel per fase: fase, kernconcepten, problemen, interventie."}',
-'{"id":"tjk-2810a","datum":"2026-10-28","soort":"opdracht","titel":"Lezen: HO 5.1–5.6 · HO 6.1–6.6","notitie":"Vul je tabel per fase aan. Plus 15 min begrippen afbakenen."}',
-'{"id":"tjk-2810b","datum":"2026-10-28","soort":"opdracht","titel":"Casus 3 (Mees) maken","notitie":""}',
-'{"id":"tjk-2910a","datum":"2026-10-29","soort":"opdracht","titel":"Lezen: HO 7.1–7.5 · HO H8","notitie":""}',
-'{"id":"tjk-2910b","datum":"2026-10-29","soort":"opdracht","titel":"Proeftoets: 2 gemengde casussen onder tijdsdruk (vraag aan Claude)","notitie":"''s Avonds alleen je begrippenkaart, en vroeg naar bed."}',
-'{"id":"tjk-3010a","datum":"2026-10-30","soort":"toets","titel":"Casustoets Taal jongere kind","notitie":"''s Ochtends alleen je begrippenkaart doorlezen. Geen nieuwe stof."}'
-]) as x
-where not exists (select 1 from kalender.klaarzetten where naam = 'gijs')
-  and not exists (select 1 from kalender.gebruikers where naam = 'gijs');
+-- ---------- Versie 3: beveiliging ----------
+-- Oplopende blokkade (15 min, 1 uur, 4 uur, 24 uur), geen makkelijke pincodes,
+-- maximum aantal nieuwe accounts per uur, pincode wijzigen en overal uitloggen.
+alter table kalender.gebruikers add column if not exists blokkades int not null default 0;
 
--- Controle: hier hoort (bij een nieuwe installatie) 15 en 9 uit te komen.
-select (select count(*) from kalender.klaarzetten) as klaargezet,
-       (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-         where n.nspname = 'public' and p.proname like 'kal_%') as publieke_functies;
+create or replace function kalender.zwakke_pin(p text)
+returns boolean language sql immutable set search_path = '' as $$
+  select p ~ '^(\d)\1{3}$'
+      or p ~ '^(19|20)\d\d$'
+      or p in ('0123','1234','2345','3456','4567','5678','6789','7890','0987','9876','8765','7654','6543','5432','4321','3210',
+               '1212','1313','2121','1122','2211','1010','0101','1001','6969','2580','0852','1357','2468','1004','4200','1230','0007');
+$$;
+
+create or replace function public.kal_registreer(p_naam text, p_pin text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare n text := lower(trim(p_naam)); g uuid;
+begin
+  if n !~ '^[a-z0-9]{3,20}$' then
+    return jsonb_build_object('ok', false, 'fout', 'Gebruikersnaam: 3 tot 20 letters of cijfers, zonder spaties.');
+  end if;
+  if p_pin !~ '^[0-9]{4}$' then
+    return jsonb_build_object('ok', false, 'fout', 'De pincode moet uit precies 4 cijfers bestaan.');
+  end if;
+  if kalender.zwakke_pin(p_pin) then
+    return jsonb_build_object('ok', false, 'fout', 'Deze pincode is te makkelijk te raden. Kies geen 1234, 0000, een jaartal of een reeks.');
+  end if;
+  if (select count(*) from kalender.gebruikers where gemaakt > now() - interval '1 hour') >= 20 then
+    return jsonb_build_object('ok', false, 'fout', 'Er zijn net veel nieuwe accounts gemaakt. Probeer het over een uur opnieuw.');
+  end if;
+  if (select count(*) from kalender.gebruikers) >= 500 then
+    return jsonb_build_object('ok', false, 'fout', 'Het maximale aantal accounts is bereikt.');
+  end if;
+  if exists (select 1 from kalender.gebruikers where naam = n) then
+    return jsonb_build_object('ok', false, 'fout', 'Deze gebruikersnaam is al bezet. Kies een andere of log in.');
+  end if;
+  insert into kalender.gebruikers (naam, pin_hash) values (n, extensions.crypt(p_pin, extensions.gen_salt('bf', 8)))
+  returning id into g;
+  perform kalender.zet_klaar(g, n);
+  return jsonb_build_object('ok', true, 'naam', n, 'token', kalender.nieuwe_sessie(g),
+    'opdrachten', kalender.lijst_van(g), 'instellingen', '{}'::jsonb);
+end $$;
+
+create or replace function public.kal_inloggen(p_naam text, p_pin text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare n text := lower(trim(p_naam)); u kalender.gebruikers%rowtype; minuten int; stap int;
+begin
+  select * into u from kalender.gebruikers where naam = n;
+  if not found then
+    return jsonb_build_object('ok', false, 'fout', 'Gebruikersnaam of pincode klopt niet.');
+  end if;
+  if u.geblokkeerd_tot is not null and u.geblokkeerd_tot > now() then
+    minuten := ceil(extract(epoch from (u.geblokkeerd_tot - now())) / 60)::int;
+    return jsonb_build_object('ok', false, 'fout', 'Te vaak een verkeerde pincode. Probeer het over ' ||
+      case when minuten > 90 then ceil(minuten / 60.0)::int || ' uur' else minuten || ' minuten' end || ' opnieuw.');
+  end if;
+  if p_pin !~ '^[0-9]{4}$' or extensions.crypt(p_pin, u.pin_hash) <> u.pin_hash then
+    if u.mislukt + 1 >= 5 then
+      stap := least(u.blokkades, 3);
+      update kalender.gebruikers set mislukt = 0, blokkades = u.blokkades + 1,
+        geblokkeerd_tot = now() + (array[interval '15 minutes', interval '1 hour', interval '4 hours', interval '24 hours'])[stap + 1]
+      where id = u.id;
+      return jsonb_build_object('ok', false, 'fout', 'Vijf keer een verkeerde pincode. Je account is ' ||
+        (array['15 minuten', '1 uur', '4 uur', '24 uur'])[stap + 1] || ' geblokkeerd.');
+    end if;
+    update kalender.gebruikers set mislukt = u.mislukt + 1 where id = u.id;
+    return jsonb_build_object('ok', false, 'fout', 'Gebruikersnaam of pincode klopt niet.');
+  end if;
+  update kalender.gebruikers set mislukt = 0, blokkades = 0, geblokkeerd_tot = null where id = u.id;
+  perform kalender.zet_klaar(u.id, n);
+  return jsonb_build_object('ok', true, 'naam', n, 'token', kalender.nieuwe_sessie(u.id),
+    'opdrachten', kalender.lijst_van(u.id), 'instellingen', u.instellingen);
+end $$;
+
+-- Pincode wijzigen. Andere apparaten worden daarna uitgelogd.
+create or replace function public.kal_pin_wijzigen(p_token uuid, p_oud text, p_nieuw text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := kalender.gebruiker_van(p_token); u kalender.gebruikers%rowtype;
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  select * into u from kalender.gebruikers where id = g;
+  if p_oud !~ '^[0-9]{4}$' or extensions.crypt(p_oud, u.pin_hash) <> u.pin_hash then
+    if u.mislukt + 1 >= 5 then
+      -- te vaak fout: overal uitloggen en blokkeren, alsof iemand de pincode probeert te raden
+      update kalender.gebruikers set mislukt = 0, blokkades = u.blokkades + 1,
+        geblokkeerd_tot = now() + interval '15 minutes' where id = g;
+      update kalender.sessies set verloopt = now() where gebruiker_id = g;
+      return jsonb_build_object('ok', false, 'sessie', false);
+    end if;
+    update kalender.gebruikers set mislukt = u.mislukt + 1 where id = g;
+    return jsonb_build_object('ok', false, 'fout', 'Je huidige pincode klopt niet.');
+  end if;
+  if p_nieuw !~ '^[0-9]{4}$' then
+    return jsonb_build_object('ok', false, 'fout', 'De nieuwe pincode moet uit precies 4 cijfers bestaan.');
+  end if;
+  if kalender.zwakke_pin(p_nieuw) then
+    return jsonb_build_object('ok', false, 'fout', 'Deze pincode is te makkelijk te raden. Kies geen 1234, 0000, een jaartal of een reeks.');
+  end if;
+  update kalender.gebruikers set pin_hash = extensions.crypt(p_nieuw, extensions.gen_salt('bf', 8)), mislukt = 0 where id = g;
+  update kalender.sessies set verloopt = now() where gebruiker_id = g and token <> p_token;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Uitloggen op alle apparaten (alle inlogbewijzen van dit account verlopen meteen)
+create or replace function public.kal_uitloggen_overal(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := kalender.gebruiker_van(p_token);
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  update kalender.sessies set verloopt = now() where gebruiker_id = g;
+  return jsonb_build_object('ok', true);
+end $$;
+
+revoke all on all functions in schema kalender from public, anon, authenticated;
+revoke all on function public.kal_pin_wijzigen(uuid, text, text), public.kal_uitloggen_overal(uuid) from public;
+grant execute on function public.kal_pin_wijzigen(uuid, text, text), public.kal_uitloggen_overal(uuid) to anon, authenticated;
+
+-- Controle: hier hoort 11 uit te komen (publieke kal_-functies).
+select count(*) as publieke_functies from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname like 'kal_%';

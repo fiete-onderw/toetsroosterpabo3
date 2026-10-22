@@ -26,8 +26,11 @@ Gemaakt voor HAN Pabo jaar 3 (studiejaar 2026–2027), maar ook bruikbaar voor w
 **Met account (optioneel):** gebruikersnaam + pincode van 4 cijfers. Je opdrachten staan dan online en je ziet ze op elk
 apparaat waar je inlogt. Opdrachten die je al zonder account had, gaan automatisch mee.
 
-- Na 5 foute pincodes wordt een account 15 minuten geblokkeerd.
-- Een pincode van 4 cijfers is geen sterke beveiliging. Zet er alleen planning in, niets persoonlijks of gevoeligs.
+- Makkelijke pincodes (zoals 1234, 0000, een jaartal of een reeks) kun je niet kiezen.
+- Na 5 foute pincodes wordt een account geblokkeerd: eerst 15 minuten, daarna 1 uur, 4 uur en 24 uur.
+  Apparaten waarop je al bent ingelogd blijven gewoon werken.
+- In de instellingen kun je je **pincode wijzigen** (je andere apparaten worden dan uitgelogd) en **uitloggen op alle apparaten**.
+- Een pincode van 4 cijfers blijft geen sterke beveiliging. Zet er alleen planning in, niets persoonlijks of gevoeligs.
 - Pincode vergeten? Er is geen herstelknop; de beheerder kan je account in Supabase verwijderen.
 - **Face ID / vingerafdruk:** na het inloggen kun je in de instellingen Face ID aanzetten. Daarmee ontgrendel je je opgeslagen
   inlog op dat apparaat. De pincode blijft de controle op de server.
@@ -39,6 +42,13 @@ Alle vaste Pabo-gegevens staan in **`toetsen.js`**. Zodra een toetsdatum bekend 
 1. Open `toetsen.js` op GitHub en klik op het potlood (Edit).
 2. Haal de toets weg uit `zonderDatum` en zet hem in `toetsen`, met een datum als `"2026-12-08"`.
 3. Klik op **Commit changes**. Binnen een minuut staat het op de website (en binnen een uur in iPhone-agenda's).
+
+## Beveiliging
+
+- Alle tabellen hebben RLS aan. De Digigenda-tabellen staan in een apart schema (`kalender`) dat niet via de API bereikbaar is;
+  de website praat alleen via de `kal_`-functies, die zelf het inlogbewijs of de geheime agenda-code controleren.
+- Pincodes worden versleuteld opgeslagen (bcrypt). Maximaal 20 nieuwe accounts per uur en 500 in totaal.
+- De website heeft een Content-Security-Policy: alleen eigen scripts, en alleen verbinding met Supabase.
 
 ## Beheer (Supabase)
 

@@ -889,6 +889,14 @@
   let vorigeNaam = "";
   let vorigeFaceid = null;
 
+  // Pincodes die te makkelijk te raden zijn (dezelfde regels als op de server)
+  const ZWAK = ["0123","1234","2345","3456","4567","5678","6789","7890","0987","9876","8765","7654","6543","5432","4321","3210",
+    "1212","1313","2121","1122","2211","1010","0101","1001","6969","2580","0852","1357","2468","1004","4200","1230","0007"];
+  const zwakkePin = (p) => /^(\d)\1{3}$/.test(p) || /^(19|20)\d\d$/.test(p) || ZWAK.includes(p);
+  const ZWAK_TEKST = "Deze pincode is te makkelijk te raden. Kies geen 1234, 0000, een jaartal of een reeks.";
+  let pinFormulier = false;
+  let overalStap = 0;
+
   function wachtrij(naam) {
     const w = laad(WACHT + naam, null);
     return w && Array.isArray(w.bewaar) && Array.isArray(w.verwijder) ? w : { bewaar: [], verwijder: [] };
@@ -1031,6 +1039,7 @@
     if (!/^[a-z0-9]{3,20}$/.test(naam)) return fout("Gebruikersnaam: 3 tot 20 letters of cijfers, zonder spaties.", "acc-naam");
     if (!/^\d{4}$/.test(pin)) return fout("De pincode bestaat uit precies 4 cijfers.", "acc-pin");
     if (modus === "registreren") {
+      if (zwakkePin(pin)) return fout(ZWAK_TEKST, "acc-pin");
       const herhaal = ($("acc-pin2") ? $("acc-pin2").value : "").trim();
       if (herhaal !== pin) return fout("De twee pincodes zijn niet hetzelfde.", "acc-pin2");
     }
@@ -1096,15 +1105,62 @@
       accountFout = true;
       return tekenAccount();
     }
-    const { naam, token } = sessie;
-    CLOUD.uitloggen(token).catch(() => {});
+    CLOUD.uitloggen(sessie.token).catch(() => {});
+    lokaalUitloggen("Je bent uitgelogd. Je opdrachten staan veilig online.");
+  }
+
+  function lokaalUitloggen(melding) {
+    const naam = sessie ? sessie.naam : "";
     weg(SESSIE); weg(CACHE + naam); weg(WACHT + naam);
-    sessie = null; ontgrendeld = false; uitlogStap = 0; agendaLink = null; linkMelding = "";
+    sessie = null; ontgrendeld = false; uitlogStap = 0; overalStap = 0; pinFormulier = false; agendaLink = null; linkMelding = "";
     syncStatus = ""; formModus = "inloggen";
-    accountMelding = "Je bent uitgelogd. Je opdrachten staan veilig online.";
+    accountMelding = melding;
     accountFout = false;
     laadEigen();
     tekenAlles();
+  }
+
+  async function uitloggenOveral() {
+    if (!actief()) return;
+    if (overalStap === 0) {
+      overalStap = 1;
+      accountMelding = "Hiermee log je uit op al je apparaten, ook deze. Klik nogmaals om te bevestigen.";
+      accountFout = true;
+      return tekenAccount();
+    }
+    await synchroniseer();
+    try {
+      controleer(await CLOUD.uitloggenOveral(sessie.token));
+      lokaalUitloggen("Je bent op al je apparaten uitgelogd.");
+    } catch (fout) {
+      overalStap = 0;
+      if (fout.verlopen) return sessieVerlopen();
+      accountMelding = fout.message || "Dat lukte niet."; accountFout = true; tekenAccount();
+    }
+  }
+
+  async function pinWijzigen() {
+    if (!actief() || bezigMetVerzoek) return;
+    const oud = ($("pin-oud").value || "").trim(), nieuw = ($("pin-nieuw").value || "").trim(), herhaal = ($("pin-herhaal").value || "").trim();
+    const fout = (t, veld) => { accountMelding = t; accountFout = true; tekenAccount(); const v = $(veld); if (v) v.focus(); };
+    if (!/^\d{4}$/.test(oud)) return fout("Vul je huidige pincode in (4 cijfers).", "pin-oud");
+    if (!/^\d{4}$/.test(nieuw)) return fout("De nieuwe pincode bestaat uit precies 4 cijfers.", "pin-nieuw");
+    if (zwakkePin(nieuw)) return fout(ZWAK_TEKST, "pin-nieuw");
+    if (nieuw !== herhaal) return fout("De twee nieuwe pincodes zijn niet hetzelfde.", "pin-herhaal");
+    bezigMetVerzoek = true;
+    try {
+      const r = await CLOUD.pinWijzigen(sessie.token, oud, nieuw);
+      bezigMetVerzoek = false;
+      if (r && r.sessie === false) return sessieVerlopen();
+      if (!r || !r.ok) return fout((r && r.fout) || "Wijzigen is niet gelukt.", "pin-oud");
+      pinFormulier = false;
+      accountMelding = "Je pincode is gewijzigd. Op je andere apparaten moet je opnieuw inloggen.";
+      accountFout = false;
+      tekenAccount();
+    } catch (e) {
+      bezigMetVerzoek = false;
+      fout(e.message || "Er ging iets mis.", "pin-oud");
+    }
   }
 
   function tekenAccount(vulNaam) {
@@ -1115,6 +1171,17 @@
     const kop = (t, l) => inWelkom ? "" : '<div class="dagkop"><h4>' + t + "</h4>" + (l ? '<span class="label">' + l + "</span>" : "") + "</div>";
     const melding = accountMelding ? '<p class="klein acc-melding' + (accountFout ? " te-laat" : "") + '" role="status">' + esc(accountMelding) + "</p>" : "";
 
+    if (actief() && pinFormulier) {
+      el.innerHTML = kop("Pincode wijzigen", "") +
+        '<form id="pin-form" class="acc-form" novalidate>' +
+        '<input type="text" autocomplete="username" value="' + esc(sessie.naam) + '" hidden>' +
+        '<label for="pin-oud">Huidige pincode</label><input id="pin-oud" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="current-password">' +
+        '<label for="pin-nieuw">Nieuwe pincode</label><input id="pin-nieuw" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password">' +
+        '<label for="pin-herhaal">Herhaal nieuwe pincode</label><input id="pin-herhaal" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password">' +
+        melding +
+        '<div class="knoppen"><button type="submit" class="hoofd">Opslaan</button><button type="button" class="zacht" data-actie="pin-annuleer">Annuleren</button></div></form>';
+      return;
+    }
     if (actief()) {
       const status = { bezig: "Bezig met opslaan…", ok: "Alles staat online.", fout: "Niet alles staat online. Wordt opnieuw geprobeerd zodra er verbinding is." }[syncStatus] || "";
       el.innerHTML = kop("Account", "Online") +
@@ -1123,7 +1190,9 @@
         (bioMogelijk ? (sessie.faceid
           ? '<button type="button" class="zacht" data-actie="bio-uit">' + esc(hoofd(BIO.naam)) + " uitzetten</button>"
           : '<button type="button" class="zacht" data-actie="bio-aan">' + esc(hoofd(BIO.naam)) + " aanzetten</button>") : "") +
-        '<button type="button" class="zacht" data-actie="uitloggen">Uitloggen</button></div>';
+        '<button type="button" class="zacht" data-actie="pin-wijzig">Pincode wijzigen</button>' +
+        '<button type="button" class="zacht" data-actie="uitloggen">Uitloggen</button></div>' +
+        '<div class="knoppen"><button type="button" class="tekstknop" data-actie="overal">Uitloggen op alle apparaten</button></div>';
       return;
     }
     if (sessie && !toonPinFormulier) {
@@ -1153,6 +1222,7 @@
   }
 
   document.addEventListener("submit", (e) => {
+    if (e.target.id === "pin-form") { e.preventDefault(); return pinWijzigen(); }
     if (e.target.id !== "acc-form") return;
     e.preventDefault();
     verstuurFormulier(formModus);
@@ -1167,6 +1237,7 @@
     if (!k) return;
     const actie = k.dataset.actie;
     if (actie !== "uitloggen") uitlogStap = 0;
+    if (actie !== "overal") overalStap = 0;
     if (actie === "wissel") { formModus = formModus === "registreren" ? "inloggen" : "registreren"; accountMelding = ""; tekenAccount($("acc-naam") ? $("acc-naam").value : ""); }
     else if (actie === "ontgrendel") ontgrendel();
     else if (actie === "toon-pin") { toonPinFormulier = true; formModus = "inloggen"; accountMelding = ""; tekenAccount(); }
@@ -1175,6 +1246,9 @@
     else if (actie === "bio-aan") bioAanzetten();
     else if (actie === "bio-uit") bioUitzetten();
     else if (actie === "uitloggen") uitloggen();
+    else if (actie === "overal") uitloggenOveral();
+    else if (actie === "pin-wijzig") { pinFormulier = true; accountMelding = ""; tekenAccount(); const v = $("pin-oud"); if (v) v.focus(); }
+    else if (actie === "pin-annuleer") { pinFormulier = false; accountMelding = ""; tekenAccount(); }
   });
 
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { vernieuw(); tekenOpenBalk(); } });

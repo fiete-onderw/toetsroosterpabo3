@@ -10,7 +10,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="manifest" href="manifest.webmanifest?v=20261022c">
+<link rel="manifest" href="manifest.webmanifest?v=20261022d">
 <meta name="theme-color" content="#2f5d8a">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="style.css?v=20261022c">
+<link rel="stylesheet" href="style.css?v=20261022d">
 </head>
 <body>
 <div class="wrap">
@@ -58,7 +58,7 @@
       <button type="button" role="tab" data-weergave="maand">Maand</button>
       <button type="button" role="tab" data-weergave="week">Week</button>
       <button type="button" role="tab" data-weergave="dag">Dag</button>
-      <button type="button" role="tab" data-weergave="opdrachten">Opdrachten</button>
+      <button type="button" role="tab" data-weergave="lijst">Lijst</button>
     </div>
     <div class="filters" id="agendaFilters" aria-label="Agenda's tonen"></div>
   </nav>
@@ -80,6 +80,22 @@
   <footer class="voet" id="voet"></footer>
 </div>
 
+<!-- Onderbalk (telefoon) -->
+<nav class="onderbalk" id="onderbalk" aria-label="Hoofdmenu">
+  <button type="button" data-onder="maand">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8.5" cy="14" r="1.2" fill="currentColor"/><circle cx="12" cy="14" r="1.2" fill="currentColor"/><circle cx="15.5" cy="14" r="1.2" fill="currentColor"/><circle cx="8.5" cy="17.4" r="1.2" fill="currentColor"/></svg>
+    <span>Maand</span>
+  </button>
+  <button type="button" data-onder="vandaag" class="thuis">
+    <span class="thuis-rondje"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.2 12 4.5l8 6.7V19a1.5 1.5 0 0 1-1.5 1.5H15v-5.2h-6v5.2H5.5A1.5 1.5 0 0 1 4 19z" fill="currentColor"/></svg></span>
+    <span>Vandaag</span>
+  </button>
+  <button type="button" data-onder="lijst">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5h11M9 12h11M9 17.5h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M3.8 6.6l1.2 1.2 2.2-2.4M3.8 12.1l1.2 1.2 2.2-2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5.4" cy="17.5" r="1.3" fill="currentColor"/></svg>
+    <span>Lijst</span>
+  </button>
+</nav>
+
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <!-- Opdracht toevoegen / wijzigen -->
@@ -88,16 +104,19 @@
     <h3 id="venstertitel">Opdracht toevoegen</h3>
     <label for="f-titel">Titel</label>
     <input id="f-titel" name="titel" type="text" maxlength="80" required placeholder="Bijv. Lesvoorbereiding rekenen inleveren">
+    <label for="f-datum">Datum</label>
+    <input id="f-datum" name="datum" type="date" required>
     <div class="twee">
       <div>
-        <label for="f-datum">Datum</label>
-        <input id="f-datum" name="datum" type="date" required>
-      </div>
-      <div>
-        <label for="f-tijd">Tijd <span class="klein">(optioneel)</span></label>
+        <label for="f-tijd">Begintijd</label>
         <input id="f-tijd" name="tijd" type="time">
       </div>
+      <div>
+        <label for="f-eind">Eindtijd</label>
+        <input id="f-eind" name="eind" type="time">
+      </div>
     </div>
+    <p class="klein f-uitleg" id="f-uitleg">Zonder begintijd is het een to-do die je kunt afvinken. Met begintijd wordt het een blok in je agenda.</p>
     <div class="twee">
       <div id="f-agenda-rij">
         <label for="f-agenda">Agenda</label>
@@ -117,7 +136,7 @@
     </div>
     <label for="f-notitie">Notitie <span class="klein">(optioneel)</span></label>
     <textarea id="f-notitie" name="notitie" rows="3" maxlength="400"></textarea>
-    <label class="vink-label"><input id="f-klaar" name="klaar" type="checkbox"> Afgerond</label>
+    <label class="vink-label" id="f-klaar-rij"><input id="f-klaar" name="klaar" type="checkbox"> Afgerond</label>
     <p class="fout" id="f-fout" role="alert"></p>
     <div class="knoppen eind">
       <button type="button" class="gevaar" id="f-verwijder" hidden>Verwijderen</button>
@@ -136,6 +155,7 @@
   </div>
   <div class="venster-inhoud">
     <section class="inst-blok" id="inst-account"></section>
+    <section class="inst-blok" id="inst-meldingen"></section>
     <section class="inst-blok" id="inst-agendas"></section>
     <section class="inst-blok" id="inst-koppeling"></section>
     <section class="inst-blok" id="inst-beginscherm"></section>
@@ -181,9 +201,9 @@
   </div>
 </div>
 
-<script src="toetsen.js?v=20261022c"></script>
-<script src="parse.js?v=20261022c"></script>
-<script src="cloud.js?v=20261022c"></script>
-<script src="app.js?v=20261022c"></script>
+<script src="toetsen.js?v=20261022d"></script>
+<script src="parse.js?v=20261022d"></script>
+<script src="cloud.js?v=20261022d"></script>
+<script src="app.js?v=20261022d"></script>
 </body>
 </html>

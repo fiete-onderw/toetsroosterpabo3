@@ -8,6 +8,7 @@
              "dinsdag volgende week", "volgende dinsdag", "deze vrijdag", "over 3 dagen", "over 2 weken",
              14 nov, 14 november (2027), 14-11, 14/11, 14-11-2026, 2026-11-14
   - tijden:  14:00, om 14.30, 14u, 9u30, 9 uur, om 9
+  - eindtijd: 14:00-15:30, 10u tot 16u, van 9 tot 12, 14:00 1 uur, 13:30 45 min, "tot 17:00" (alleen eindtijd)
   - agenda:  #school, #werk, #prive / #privé / #persoonlijk
   - soort:   de woorden deadline, toets, tentamen, herkansing, afspraak (blijven in de titel staan)
 */
@@ -84,7 +85,30 @@
     const tag = zoek("#(" + Object.keys(AGENDA).join("|") + ")" + B1, (m) => AGENDA[m[1]]);
     if (tag) { agenda = tag.waarde; neem(tag.s, tag.e, "agenda", agenda); }
 
-    // 2. tijd (vóór de dagen, zodat "zo" naast een tijd herkend kan worden)
+    // 2. tijdvak: "14:00-15:30", "10u tot 16u", "van 9 tot 12"
+    const TOK = "(?:[01]?\\d|2[0-3])(?:[:.][0-5]\\d|u(?:[0-5]\\d)?)?(?:\\s*uur)?";
+    const naarTijd = (t) => { const m = /(\d{1,2})(?:[:.](\d{2})|u(\d{2})?)?/.exec(t); return pad(+m[1]) + ":" + (m[2] || m[3] || "00"); };
+    const sterk = (t) => /[:u]/.test(t);   // 14:00, 14u, 14 uur (niet: 14 of 14.30)
+    let eind = null;
+    const vakPatronen = [
+      [B0 + "van\\s+(" + TOK + ")\\s*(?:-|–|tot)\\s*(" + TOK + ")" + B1, (m) => [naarTijd(m[1]), naarTijd(m[2])]],
+      ["(?:" + B0 + "om\\s+)?(?<![\\d.\\p{L}])(" + TOK + ")\\s*(-|–|tot)\\s*(" + TOK + ")(?![\\d.\\p{L}])", (m) => {
+        const ok = m[2] === "tot" ? (sterk(m[1]) || sterk(m[3])) : (sterk(m[1]) && sterk(m[3]));
+        return ok ? [naarTijd(m[1]), naarTijd(m[3])] : null;
+      }]
+    ];
+    for (const [p, f] of vakPatronen) {
+      const r = zoek(p, f);
+      if (r) { tijd = r.waarde[0]; eind = r.waarde[1]; neem(r.s, r.e, "tijd", tijd + "–" + eind); break; }
+    }
+
+    // 3. alleen een eindtijd: "inleveren vrijdag tot 17:00"
+    if (!tijd) {
+      const r = zoek(B0 + "tot\\s+(" + TOK + ")" + B1, (m) => sterk(m[1]) ? naarTijd(m[1]) : null);
+      if (r) { eind = r.waarde; neem(r.s, r.e, "eind", eind); }
+    }
+
+    // 4. losse tijd (vóór de dagen, zodat "zo" naast een tijd herkend kan worden)
     const tijdPatronen = [
       // 14:00, om 14:00, 14:00 uur
       ["(?:" + B0 + "om\\s+)?" + B0 + "([01]?\\d|2[0-3]):([0-5]\\d)" + B1 + "(?:\\s*(?:uur|u)" + B1 + ")?", (m) => pad(+m[1]) + ":" + m[2]],
@@ -93,18 +117,33 @@
       [B0 + "([01]?\\d|2[0-3])\\.([0-5]\\d)\\s*(?:uur|u)" + B1, (m) => pad(+m[1]) + ":" + m[2]],
       // 9u30
       [B0 + "([01]?\\d|2[0-3])u([0-5]\\d)" + B1, (m) => pad(+m[1]) + ":" + m[2]],
-      // 14u, 9 uur, om 9 uur
-      ["(?:" + B0 + "om\\s+)?" + B0 + "([01]?\\d|2[0-3])\\s*(?:uur|u)" + B1, (m) => pad(+m[1]) + ":00"],
+      // 14u, 9 uur, om 9 uur ("2 uur" zonder 'om' is meestal een duur, geen tijd)
+      ["(" + B0 + "om\\s+)?" + B0 + "([01]?\\d|2[0-3])\\s*(?:uur|u)" + B1, (m) => (!m[1] && +m[2] <= 6 && /uur/.test(m[0])) ? null : pad(+m[2]) + ":00"],
       // om 9
       [B0 + "om\\s+([01]?\\d|2[0-3])" + B1 + "(?!\\s*[:.])", (m) => pad(+m[1]) + ":00"]
     ];
-    for (const [p, f] of tijdPatronen) {
+    if (!tijd && !eind) for (const [p, f] of tijdPatronen) {
       const r = zoek(p, f);
       if (r) { tijd = r.waarde; neem(r.s, r.e, "tijd", tijd); break; }
     }
     const tijdSpan = tijd ? bezet[bezet.length - 1] : null;
 
-    // 3. dag
+    // 5. duur na een begintijd: "1 uur", "1,5 uur", "anderhalf uur", "45 min", "een kwartier"
+    if (tijd && !eind) {
+      const r = zoek(B0 + "(\\d{1,2}(?:[.,]5)?|een|anderhalf|half)?\\s*(uur|u|min|minuten|kwartier)" + B1, (m) => {
+        const g = m[1] === "een" || (!m[1] && m[2] === "kwartier") ? 1 : m[1] === "anderhalf" ? 1.5 : m[1] === "half" ? 0.5 : m[1] ? parseFloat(m[1].replace(",", ".")) : null;
+        if (g == null) return null;
+        const min = m[2] === "kwartier" ? g * 15 : /^min/.test(m[2]) ? g : g * 60;
+        if (!(min > 0 && min < 24 * 60)) return null;
+        const [h, mm] = tijd.split(":").map(Number);
+        const t = (h * 60 + mm + min) % (24 * 60);
+        return pad(Math.floor(t / 60)) + ":" + pad(Math.round(t % 60));
+      });
+      if (r) { eind = r.waarde; neem(r.s, r.e, "eind", eind); }
+    }
+
+
+    // 6. dag
     const datumPatronen = [
       // 2026-11-14
       [B0 + "(\\d{4})-(\\d{1,2})-(\\d{1,2})" + B1, (m) => geldig(+m[1], +m[2] - 1, +m[3]) ? new Date(+m[1], +m[2] - 1, +m[3]) : null],
@@ -152,17 +191,17 @@
       if (r) { datum = iso(r.waarde); neem(r.s, r.e, "datum", datum); break; }
     }
 
-    // 4. soort (het woord blijft in de titel staan)
+    // 7. soort (het woord blijft in de titel staan)
     const s = new RegExp(B0 + "(" + Object.keys(SOORT).join("|") + ")" + B1, "iu").exec(laag);
     if (s) soort = SOORT[s[1]];
 
-    // 5. titel = alles wat over is
+    // 8. titel = alles wat over is
     bezet.sort((a, b) => a[0] - b[0]);
     let titel = "", pos = 0;
     for (const [a, b] of bezet) { titel += tekst.slice(pos, a) + " "; pos = b; }
     titel += tekst.slice(pos);
     titel = titel.replace(/\s+/g, " ").trim();
-    const rand = /^(?:op|om|de|voor|tot|-|–|—|,|:|@|\|)\s+|\s+(?:op|om|de|voor|tot|-|–|—|,|:|@|\|)$|^[,:;\-–—@|]+|[,:;\-–—@|]+$/i;
+    const rand = /^(?:op|om|de|voor|-|–|—|,|:|@|\|)\s+|\s+(?:op|om|de|voor|tot|-|–|—|,|:|@|\|)$|^[,:;\-–—@|]+|[,:;\-–—@|]+$/i;
     let vorige;
     do { vorige = titel; titel = titel.replace(rand, "").trim(); } while (titel !== vorige);
 
@@ -172,6 +211,7 @@
       datum: datum || o.standaardDatum || iso(van),
       datumHerkend: !!datum,
       tijd,
+      eind,
       soort: soort || "opdracht",
       agenda: agenda || o.standaardAgenda || null,
       agendaHerkend: !!agenda,

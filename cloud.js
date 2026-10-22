@@ -40,6 +40,21 @@ window.CLOUD = (function () {
     agendaLink: (token, nieuw) => rpc("kal_agenda_link", { p_token: token, p_nieuw: !!nieuw }),
     pinWijzigen: (token, oud, nieuw) => rpc("kal_pin_wijzigen", { p_token: token, p_oud: oud, p_nieuw: nieuw }),
     uitloggenOveral: (token) => rpc("kal_uitloggen_overal", { p_token: token }),
+    pushAanmelden: (token, abonnement) => rpc("kal_push_aanmelden", { p_token: token, p_abonnement: abonnement }),
+    pushAfmelden: (token, endpoint) => rpc("kal_push_afmelden", { p_token: token, p_endpoint: endpoint }),
+    // Publieke VAPID-sleutel: hiermee weet de push-dienst van Apple/Google dat meldingen van Digigenda komen
+    VAPID: "BGcysEYblBc2uJ1jazXcBv0BCmMvRnYbbfZXQsE8WcI-VR11KFYs5A2UEg-u6WVMT-ss4Wp_nV46pVsZu5qGTH8",
+    testMelding: async (token) => {
+      let res;
+      try {
+        res = await fetch(URL + "/functions/v1/digigenda-meldingen", {
+          method: "POST",
+          headers: { "apikey": SLEUTEL, "Content-Type": "application/json" },
+          body: JSON.stringify({ test: true, token: token })
+        });
+      } catch (e) { throw new Error("Geen verbinding met de server. Ben je online?"); }
+      return res.json().catch(() => ({ ok: false }));
+    },
     // Adres voor het agenda-abonnement (iPhone/Mac Agenda, Google Agenda)
     agendaUrl: (code) => URL + "/functions/v1/digigenda-agenda?code=" + encodeURIComponent(code)
   };

@@ -104,14 +104,16 @@ export function maakIcs(data, planning, nu) {
     const label = SOORT_LABEL[o.soort];
     const omschrijving = [label ? "Soort: " + label : "", o.notitie || ""].filter(Boolean).join("\n");
     const categorie = AGENDA_NAAM[o.agenda] || "School";
+    const eind = /^\d{2}:\d{2}$/.test(o.eind || "") ? o.eind : null;
     if (o.tijd && /^\d{2}:\d{2}$/.test(o.tijd)) {
       r.push("BEGIN:VEVENT", "UID:" + uid, "DTSTAMP:" + dtstamp,
         "DTSTART;TZID=Europe/Amsterdam:" + datumIcs(o.datum) + "T" + o.tijd.replace(":", "") + "00",
-        "DURATION:PT1H", "SUMMARY:" + tekst(titel));
+        eind && eind > o.tijd ? "DTEND;TZID=Europe/Amsterdam:" + datumIcs(o.datum) + "T" + eind.replace(":", "") + "00" : "DURATION:PT1H",
+        "SUMMARY:" + tekst(titel));
       if (omschrijving) r.push("DESCRIPTION:" + tekst(omschrijving));
       r.push("CATEGORIES:" + tekst(categorie), "END:VEVENT");
     } else {
-      dagEvent(uid, datumIcs(o.datum), volgendeDag(o.datum), titel, omschrijving, categorie);
+      dagEvent(uid, datumIcs(o.datum), volgendeDag(o.datum), titel + (eind ? " (tot " + eind + ")" : ""), omschrijving, categorie);
     }
   }
 

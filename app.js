@@ -25,7 +25,7 @@
   const SOORT_LABEL = { opdracht: "Opdracht", deadline: "Deadline", toets: "Toets", herkansing: "Herkansing", afspraak: "Afspraak", overig: "Overig" };
   const VAST_LABEL = { lkt: "Landelijke kennistoets", toets: "Cursustoets", periode: "Periode" };
   const DG_LABEL = { alle: "JK + OK", jk: "Jongere kind", ok: "Oudere kind" };
-  const WEERGAVEN = ["maand", "week", "dag", "opdrachten"];
+  const WEERGAVEN = ["maand", "week", "dag", "lijst"];
 
   const MAANDEN = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
   const KORT = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
@@ -49,6 +49,13 @@
   const agendaKleur = (a) => "var(--ag-" + (AGENDAS.includes(a) ? a : "school") + ")";
   const vastKleur = (soort) => "var(--" + soort + ")";
   const maandagVan = (s) => { const d = ontleed(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return iso(d); };
+  const minuten = (t) => +t.slice(0, 2) * 60 + +t.slice(3, 5);
+  const klok = (m) => pad(Math.floor(m / 60)) + ":" + pad(m % 60);
+  const nuMinuten = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+  const duurTekst = (m) => m < 60 ? m + " min" : Math.floor(m / 60) + " u" + (m % 60 ? " " + (m % 60) + " min" : "");
+  // Zonder begintijd = to-do (afvinkbaar). Met begintijd = blok in de agenda.
+  const isTodo = (o) => !o.tijd;
+  const tijdTekst = (o) => o.tijd ? o.tijd + (o.eind ? "–" + o.eind : "") : (o.eind ? "tot " + o.eind : "");
 
   function weeknummer(d) {
     const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -69,13 +76,18 @@
   }
   function weg(sleutel) { try { localStorage.removeItem(sleutel); } catch (e) { /* niets */ } }
 
+  const TIJD = /^([01]\d|2[0-3]):[0-5]\d$/;
   function normaal(o) {
     if (!o || typeof o.titel !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(o.datum || "")) return null;
+    const tijd = TIJD.test(o.tijd || "") ? o.tijd : null;
+    let eind = TIJD.test(o.eind || "") ? o.eind : null;
+    if (tijd && eind && eind <= tijd) eind = null;
     return {
       id: String(o.id || nieuwId()).slice(0, 40),
       titel: o.titel.slice(0, 80),
       datum: o.datum,
-      tijd: /^([01]\d|2[0-3]):[0-5]\d$/.test(o.tijd || "") ? o.tijd : null,
+      tijd,
+      eind,
       soort: SOORTEN.includes(o.soort) ? o.soort : "opdracht",
       agenda: AGENDAS.includes(o.agenda) ? o.agenda : "school",
       notitie: String(o.notitie || "").slice(0, 400),
@@ -94,14 +106,22 @@
       agendas: AGENDAS.filter((a) => agendas.includes(a)),
       pabo: typeof x.pabo === "boolean" ? x.pabo : true,
       doelgroep: ["alle", "jk", "ok"].includes(x.doelgroep) ? x.doelgroep : (oud && ["alle", "jk", "ok"].includes(oud.doelgroep) ? oud.doelgroep : "alle"),
-      welkom: !!x.welkom
+      welkom: !!x.welkom,
+      meldingen: {
+        ochtend: !(x.meldingen && x.meldingen.ochtend === false),
+        afspraak: !(x.meldingen && x.meldingen.afspraak === false)
+      }
     };
   }
   let instellingen = normaleInstellingen(laad(INST, null), laad(OUDE_VOORKEUR, null));
   let voorkeur = laad(VOORKEUR, null);
   if (!voorkeur || typeof voorkeur !== "object") voorkeur = {};
-  if (!WEERGAVEN.includes(voorkeur.weergave)) voorkeur.weergave = "maand";
   if (!Array.isArray(voorkeur.verborgen)) voorkeur.verborgen = [];
+  // Startscherm: telefoon opent op Vandaag (dag), laptop op de maand
+  const telefoon = () => !!(window.matchMedia && window.matchMedia("(max-width: 640px)").matches);
+  const smalScherm = () => !!(window.matchMedia && window.matchMedia("(max-width: 760px)").matches);
+  voorkeur.weergave = telefoon() ? "dag" : "maand";
+  let weekendTonen = false;
   const bewaarVoorkeur = () => bewaar(VOORKEUR, voorkeur);
 
   // ---------- sessie en opdrachten ----------
@@ -143,7 +163,7 @@
   }
   const opVolgorde = (a, b) => (a.datum.localeCompare(b.datum)) || ((a.tijd || "").localeCompare(b.tijd || ""));
   const eigenOp = (s) => opdrachten.filter((o) => o.datum === s && zichtbaar(o)).sort(opVolgorde);
-  const nogOpen = () => { const v = vandaag(); return opdrachten.filter((o) => !o.klaar && o.datum < v && zichtbaar(o)).sort(opVolgorde); };
+  const nogOpen = () => { const v = vandaag(); return opdrachten.filter((o) => isTodo(o) && !o.klaar && o.datum < v && zichtbaar(o)).sort(opVolgorde); };
 
   // ---------- kop, filters, tabs ----------
   function tekenKop() {
@@ -157,9 +177,11 @@
   }
 
   function tekenTabs() {
-    document.querySelectorAll("[data-weergave]").forEach((b) => {
-      const ja = b.dataset.weergave === voorkeur.weergave;
-      b.setAttribute("aria-selected", String(ja));
+    const w = voorkeur.weergave;
+    document.querySelectorAll("[data-weergave]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.weergave === w)));
+    const onder = w === "dag" || w === "week" ? "vandaag" : w;
+    document.querySelectorAll("[data-onder]").forEach((b) => {
+      if (b.dataset.onder === onder) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
     $("layout").classList.toggle("enkel", voorkeur.weergave !== "maand");
     $("zij").hidden = voorkeur.weergave !== "maand";
@@ -221,22 +243,26 @@
     return "→ dag later";
   }
 
-  // Eén regel in de dag- en lijstweergave
+  // Eén regel in de dag-, lijst- en zijweergave. To-do's hebben een vinkje, blokken (met tijd) een tijdstip.
   function rij(o, metDatum) {
+    const blok = !isTodo(o);
+    const klaar = !blok && o.klaar;
     const meta = [];
     if (metDatum) meta.push(dagKort(o.datum));
     if (instellingen.agendas.length > 1) meta.push(AGENDA_NAAM[o.agenda]);
     if (o.soort !== "opdracht") meta.push(SOORT_LABEL[o.soort]);
-    return '<li class="rij' + (o.klaar ? " klaar" : "") + '" style="--c:' + agendaKleur(o.agenda) + '">' +
-      '<button type="button" class="vink" data-klaar="' + esc(o.id) + '" aria-pressed="' + o.klaar + '" aria-label="' + (o.klaar ? "Weer openzetten: " : "Afvinken: ") + esc(o.titel) + '">' + vinkSvg + "</button>" +
+    if (!blok && o.eind) meta.push("tot " + o.eind);
+    const links = blok
+      ? '<span class="tijdstip" aria-label="' + esc(tijdTekst(o)) + '">' + o.tijd + (o.eind ? "<small>" + o.eind + "</small>" : "") + "</span>"
+      : '<button type="button" class="vink" data-klaar="' + esc(o.id) + '" aria-pressed="' + klaar + '" aria-label="' + (klaar ? "Weer openzetten: " : "Afvinken: ") + esc(o.titel) + '">' + vinkSvg + "</button>";
+    return '<li class="rij' + (klaar ? " klaar" : "") + (blok ? " blokrij" : "") + '" style="--c:' + agendaKleur(o.agenda) + '">' + links +
       '<div class="rij-tekst">' +
-      (o.tijd ? '<span class="rij-tijd">' + o.tijd + "</span>" : "") +
       '<span class="rij-titel">' + esc(o.titel) + "</span>" +
       (meta.length ? '<span class="rij-meta">' + esc(meta.join(" · ")) + "</span>" : "") +
       (o.notitie ? '<p class="rij-notitie">' + esc(o.notitie) + "</p>" : "") +
       "</div>" +
       '<div class="rij-acties">' +
-      (!o.klaar ? '<button type="button" class="mini" data-schuif="' + esc(o.id) + '">' + schuifLabel(o) + "</button>" : "") +
+      (!blok && !o.klaar ? '<button type="button" class="mini" data-schuif="' + esc(o.id) + '">' + schuifLabel(o) + "</button>" : "") +
       '<button type="button" class="mini" data-bewerk="' + esc(o.id) + '">Wijzig</button></div></li>';
   }
 
@@ -286,7 +312,7 @@
           if (aantal++ < max) chips += '<div class="chip vast" style="--c:' + vastKleur(v.soort) + '" title="' + esc(v.titel) + '">' + slot() + "<span>" + esc(v.titel) + "</span></div>";
         });
         eigen.forEach((o) => {
-          if (aantal++ < max) chips += '<button type="button" class="chip eigen' + (o.klaar ? " klaar" : "") + (o.soort !== "opdracht" ? " nadruk" : "") + '" data-id="' + esc(o.id) + '" style="--c:' + agendaKleur(o.agenda) + '" title="' + esc((o.tijd ? o.tijd + " " : "") + o.titel) + '"><span>' + esc(o.titel) + "</span></button>";
+          if (aantal++ < max) chips += '<button type="button" class="chip eigen' + (isTodo(o) && o.klaar ? " klaar" : "") + (o.soort !== "opdracht" ? " nadruk" : "") + (isTodo(o) ? "" : " getimed") + '" data-id="' + esc(o.id) + '" style="--c:' + agendaKleur(o.agenda) + '" title="' + esc((tijdTekst(o) ? tijdTekst(o) + " " : "") + o.titel) + '">' + (o.tijd ? "<b>" + o.tijd + "</b>" : "") + "<span>" + esc(o.titel) + "</span></button>";
         });
         if (aantal > max) chips += '<span class="meer">+' + (aantal - max) + " meer</span>";
         const vakLabel = vak && (s === vak.start || d.getDate() === 1 || i === 0) ? '<span class="vaklabel">' + esc(vak.naam) + "</span>" : "";
@@ -303,79 +329,230 @@
       '<ul class="legenda" aria-label="Legenda">' + legenda + "</ul>";
   }
 
-  // ---------- weekweergave ----------
-  function tekenWeek() {
-    const ma = maandagVan(gekozen);
-    const zo = plusDagen(ma, 6);
-    const vs = vandaag();
-    const d1 = ontleed(ma), d2 = ontleed(zo);
-    const titel = d1.getMonth() === d2.getMonth()
-      ? d1.getDate() + " – " + d2.getDate() + " " + MAANDEN[d2.getMonth()]
-      : d1.getDate() + " " + KORT[d1.getMonth()] + " – " + d2.getDate() + " " + KORT[d2.getMonth()];
-    let kolommen = "";
-    for (let i = 0; i < 7; i++) {
-      const s = plusDagen(ma, i);
-      const d = ontleed(s);
-      const vak = vakantieOp(s);
-      const vast = vastOp(s);
-      const eigen = eigenOp(s);
-      const vakLabel = vak && (i === 0 || s === vak.start);
-      kolommen += '<section class="weekdag' + (s === vs ? " vandaag" : "") + (i >= 5 ? " weekend" : "") + (vak ? " vakantie" : "") + '">' +
-        '<button type="button" class="weekdag-kop" data-naar-dag="' + s + '"><span class="wd">' + DAGEN[i] + '</span><span class="nr">' + d.getDate() + "</span>" +
-        (vakLabel ? '<span class="vaklabel">' + esc(vak.naam) + "</span>" : "") + "</button>" +
-        '<ul class="weeklijst">' +
-        vast.map((v) => '<li class="wchip vast" style="--c:' + vastKleur(v.soort) + '">' + slot() + "<span>" + esc(v.titel) + "</span></li>").join("") +
-        eigen.map((o) => '<li><button type="button" class="wchip' + (o.klaar ? " klaar" : "") + (o.soort !== "opdracht" ? " nadruk" : "") + '" data-bewerk="' + esc(o.id) + '" style="--c:' + agendaKleur(o.agenda) + '">' +
-          (o.tijd ? "<b>" + o.tijd + "</b> " : "") + "<span>" + esc(o.titel) + "</span></button></li>").join("") +
-        "</ul>" +
-        '<button type="button" class="plus" data-nieuw="' + s + '" aria-label="Opdracht toevoegen op ' + langDatum(s) + '">+</button>' +
-        "</section>";
-    }
-    const kortTitel = d1.getDate() + (d1.getMonth() === d2.getMonth() ? "" : " " + KORT[d1.getMonth()]) + "–" + d2.getDate() + " " + KORT[d2.getMonth()] + " · wk " + weeknummer(d1);
-    $("hoofd").innerHTML = navBalk(titel + " " + d2.getFullYear() + " · week " + weeknummer(d1), "Deze week", kortTitel) +
-      '<div class="weekraster">' + kolommen + "</div>";
+  // ---------- tijdblokken (dag en week) ----------
+  const UUR_BEGIN = 7, UUR_EIND = 22;
+
+  // Zet afspraken om in blokken met kolommen, zodat afspraken die overlappen naast elkaar staan
+  function blokkenVan(lijst) {
+    const blokken = lijst.filter((o) => o.tijd).map((o) => {
+      const s = minuten(o.tijd);
+      let e = o.eind ? minuten(o.eind) : s + 60;
+      if (e <= s) e = s + 60;
+      e = Math.min(e, 24 * 60);
+      return { o, s, e, ev: Math.min(24 * 60, Math.max(e, s + 30)) };
+    }).sort((a, b) => a.s - b.s || b.ev - a.ev);
+    let groep = [], groepEind = -1;
+    const sluit = () => { const n = groep.reduce((m, x) => Math.max(m, x.kol + 1), 1); groep.forEach((x) => { x.n = n; }); groep = []; groepEind = -1; };
+    blokken.forEach((x) => {
+      if (groep.length && x.s >= groepEind) sluit();
+      const bezet = [];
+      groep.forEach((y) => { if (y.ev > x.s) bezet[y.kol] = true; });
+      let k = 0;
+      while (bezet[k]) k++;
+      x.kol = k;
+      groep.push(x);
+      groepEind = Math.max(groepEind, x.ev);
+    });
+    if (groep.length) sluit();
+    return blokken;
+  }
+  function urenBereik(blokken) {
+    let b = UUR_BEGIN, e = UUR_EIND;
+    blokken.forEach((x) => { b = Math.min(b, Math.floor(x.s / 60)); e = Math.max(e, Math.ceil(x.ev / 60)); });
+    return { b, e: Math.min(24, e) };
+  }
+  function blokStatus(x, datum) {
+    const v = vandaag();
+    if (datum < v) return " voorbij";
+    if (datum > v) return "";
+    const nm = nuMinuten();
+    return x.e <= nm ? " voorbij" : (x.s <= nm ? " bezig" : "");
+  }
+  function blokHtml(x, b, datum) {
+    const o = x.o;
+    const hoog = (x.ev - x.s) / 60;
+    const kort = x.ev - x.s < 50;
+    const extra = o.soort !== "opdracht" && o.soort !== "afspraak" ? SOORT_LABEL[o.soort] : "";
+    return '<button type="button" class="blok' + blokStatus(x, datum) + (kort ? " kort" : "") + (extra ? " nadruk" : "") + (x.n > 1 ? " deel" : "") + '" data-bewerk="' + esc(o.id) + '" data-s="' + x.s + '" data-e="' + x.e + '"' +
+      ' aria-label="' + esc(tijdTekst(o) + " " + o.titel) + '"' +
+      ' style="--c:' + agendaKleur(o.agenda) + ";top:calc(var(--uurh) * " + ((x.s - b * 60) / 60).toFixed(4) + ");height:calc(var(--uurh) * " + hoog.toFixed(4) + " - 2px);" +
+      "left:calc(" + (x.kol / x.n * 100).toFixed(3) + "% + 2px);width:calc(" + (100 / x.n).toFixed(3) + '% - 4px)">' +
+      '<span class="blok-tijd">' + o.tijd + (o.eind ? '<span class="tot">–' + o.eind + "</span>" : "") + "</span>" +
+      '<span class="blok-titel">' + esc(o.titel) + "</span>" +
+      (extra && !kort ? '<span class="blok-soort">' + esc(extra) + "</span>" : "") + "</button>";
+  }
+  function nuLijnHtml(b, e, metTijd) {
+    const nm = nuMinuten();
+    if (nm < b * 60 || nm >= e * 60) return "";
+    return '<div class="nu-lijn" style="top:calc(var(--uurh) * ' + ((nm - b * 60) / 60).toFixed(4) + ')" aria-hidden="true">' + (metTijd ? "<span>" + klok(nm) + "</span>" : "") + "</div>";
+  }
+  function kolomHtml(d, blokken, b, e, metTijd) {
+    let h = '<div class="kolom' + (d === vandaag() ? " vandaag" : "") + '" data-tijdlijn-datum="' + d + '" data-begin="' + b + '" data-eind="' + e + '"' + (metTijd ? ' data-met-tijd="1"' : "") + ">";
+    for (let u = b; u < e; u++) h += '<button type="button" class="uurvak" data-slot="' + d + "|" + pad(u) + ':00" aria-label="Toevoegen op ' + dagKort(d) + " om " + pad(u) + ':00"></button>';
+    h += blokken.map((x) => blokHtml(x, b, d)).join("");
+    if (d === vandaag()) h += nuLijnHtml(b, e, metTijd);
+    return h + "</div>";
+  }
+  function rasterHtml(datums, perDag, bereik, klasse, metTijd) {
+    const { b, e } = bereik;
+    let labels = "";
+    for (let u = b; u < e; u++) labels += '<span style="top:calc(var(--uurh) * ' + (u - b) + ')">' + pad(u) + ":00</span>";
+    return '<div class="raster ' + klasse + '" style="--uren:' + (e - b) + ";--dagen:" + datums.length + '">' +
+      '<div class="uurlabels" aria-hidden="true">' + labels + "</div>" +
+      datums.map((d, i) => kolomHtml(d, perDag[i], b, e, metTijd)).join("") + "</div>";
   }
 
-  // ---------- dagweergave (rustige lijst) ----------
+  // Wisselknop Dag | Week (op de telefoon; op de laptop staan de tabs bovenin)
+  function modusKnop() {
+    const w = voorkeur.weergave;
+    return '<div class="modus" role="group" aria-label="Weergave">' +
+      '<button type="button" data-modus="dag" aria-pressed="' + (w === "dag") + '">Dag</button>' +
+      '<button type="button" data-modus="week" aria-pressed="' + (w === "week") + '">Week</button></div>';
+  }
+  function groet() {
+    const u = new Date().getHours();
+    const g = u < 6 ? "Goedenacht" : u < 12 ? "Goedemorgen" : u < 18 ? "Goedemiddag" : "Goedenavond";
+    return g + (actief() ? ", " + sessie.naam : "");
+  }
+
+  // ---------- Vandaag / dagweergave ----------
+  function weekstripHtml(s) {
+    const ma = maandagVan(s);
+    const v = vandaag();
+    let h = '<div class="weekstrip" role="group" aria-label="Kies een dag">';
+    for (let i = 0; i < 7; i++) {
+      const d = plusDagen(ma, i);
+      const items = vastOp(d).map((x) => vastKleur(x.soort)).concat(eigenOp(d).filter((o) => !(isTodo(o) && o.klaar)).map((o) => agendaKleur(o.agenda)));
+      h += '<button type="button" data-kies="' + d + '" class="ws' + (d === v ? " vandaag" : "") + (d === s ? " gekozen" : "") + (i >= 5 ? " weekend" : "") + '"' +
+        (d === s ? ' aria-current="date"' : "") + ' aria-label="' + langDatum(d) + (items.length ? ", " + items.length + " items" : "") + '">' +
+        '<span class="ws-d">' + DAGEN[i] + '</span><span class="ws-n">' + ontleed(d).getDate() + "</span>" +
+        '<span class="ws-stip">' + items.slice(0, 3).map((c) => '<i style="background:' + c + '"></i>').join("") + "</span></button>";
+    }
+    return h + "</div>";
+  }
+
+  function nuKaartInhoud() {
+    const v = vandaag(), nm = nuMinuten();
+    const eigen = eigenOp(v);
+    const blokken = blokkenVan(eigen.filter((o) => !isTodo(o)));
+    const bezig = blokken.filter((x) => x.s <= nm && nm < x.e);
+    const volgend = blokken.filter((x) => x.s > nm)[0];
+    const open = eigen.filter((o) => isTodo(o) && !o.klaar).length;
+    const regel = (label, x, sub, klasse) => '<button type="button" class="nu-regel ' + klasse + '" data-bewerk="' + esc(x.o.id) + '" style="--c:' + agendaKleur(x.o.agenda) + '">' +
+      '<span class="nu-label">' + label + '</span><span class="nu-tekst"><strong>' + esc(x.o.titel) + '</strong><span class="klein">' + esc(sub) + "</span></span></button>";
+    let h = "";
+    bezig.forEach((x) => { h += regel("Nu", x, x.o.eind ? "tot " + x.o.eind + " · nog " + duurTekst(x.e - nm) : "begon om " + x.o.tijd, "nu"); });
+    if (volgend) h += regel("Hierna", volgend, tijdTekst(volgend.o) + " · over " + duurTekst(volgend.s - nm), "hierna");
+    if (!h) h = '<p class="nu-vrij"><strong>Geen afspraken meer vandaag.</strong> ' + (open ? "Tijd voor je to-do’s." : "Lekker vrij!") + "</p>";
+    return h;
+  }
+
   function tekenDag() {
     const s = gekozen;
+    const v = vandaag();
+    const isVandaag = s === v;
     const vak = vakantieOp(s);
     const per = periodeOp(s);
     const vast = vastOp(s);
     const eigen = eigenOp(s);
-    const zonderTijd = eigen.filter((o) => !o.tijd);
-    const metTijd = eigen.filter((o) => o.tijd);
+    const todos = eigen.filter(isTodo).sort((a, b) => (a.klaar - b.klaar) || opVolgorde(a, b));
+    const blokken = blokkenVan(eigen.filter((o) => !isTodo(o)));
+    const open = todos.filter((o) => !o.klaar).length;
     const info = [per ? per.naam : "", vak ? vak.naam : ""].filter(Boolean).join(" · ");
-    let html = navBalk(dagTitel(s) + (s === vandaag() ? " · vandaag" : ""), "Vandaag", hoofd(dagKort(s)));
-    if (info) html += '<p class="label dag-info">' + esc(info) + "</p>";
-    if (!vast.length && !eigen.length) {
-      html += '<p class="leeg groot-leeg">Niets gepland. Typ hierboven iets als <em>“' + esc(s === vandaag() ? "vandaag" : DAGEN_LANG[ontleed(s).getDay()]) + ' boodschappen doen”</em>.</p>';
-    } else {
-      if (vast.length) html += '<ul class="rijen">' + vast.map(vastRij).join("") + "</ul>";
-      if (zonderTijd.length) html += '<h3 class="groep-kop">Hele dag</h3><ul class="rijen">' + zonderTijd.map((o) => rij(o, false)).join("") + "</ul>";
-      if (metTijd.length) html += '<h3 class="groep-kop">Met tijd</h3><ul class="rijen">' + metTijd.map((o) => rij(o, false)).join("") + "</ul>";
-    }
-    html += '<div class="knoppen"><button type="button" class="hoofd" data-nieuw="' + s + '">+ Opdracht op deze dag</button></div>';
+
+    let html = '<div class="dag-boven"><p class="groet">' + esc(isVandaag ? groet() : info || "") + "</p>" + modusKnop() + "</div>" +
+      navBalk(dagTitel(s) + (isVandaag ? "" : " " + ontleed(s).getFullYear()), "Vandaag", hoofd(dagKort(s))) +
+      (isVandaag && info ? '<p class="label dag-info">' + esc(info) + "</p>" : "") +
+      weekstripHtml(s);
+
+    html += '<div class="dagindeling">';
+    if (isVandaag) html += '<section class="nu-kaart" id="nuKaart" aria-live="polite">' + nuKaartInhoud() + "</section>";
+
+    // To-do's
+    html += '<section class="dag-todo"><div class="sectie-kop"><h3>To-do' + (todos.length ? ' <span class="aantal">' + open + " open</span>" : "") + "</h3>" +
+      '<button type="button" class="mini" data-nieuw="' + s + '">+ To-do</button></div>';
+    if (vast.length || todos.length) html += '<ul class="rijen">' + vast.map(vastRij).join("") + todos.map((o) => rij(o, false)).join("") + "</ul>";
+    else html += '<p class="leeg">Geen to-do’s. Typ hierboven bijvoorbeeld <em>“' + esc(isVandaag ? "vandaag" : DAGEN_LANG[ontleed(s).getDay()]) + ' samenvatting schrijven”</em>.</p>';
+    html += "</section>";
+
+    // Agenda met tijdblokken
+    html += '<section class="dag-agenda"><div class="sectie-kop"><h3>Agenda</h3><span class="klein">' + (blokken.length ? blokken.length + (blokken.length === 1 ? " afspraak" : " afspraken") : "Tik op een uur om iets te plannen") + "</span></div>" +
+      rasterHtml([s], [blokken], urenBereik(blokken), "dagraster", true) + "</section>";
+    html += "</div>";
     $("hoofd").innerHTML = html;
   }
 
-  // ---------- opdrachtenlijst (apart kopje) ----------
-  function tekenOpdrachten() {
+  // ---------- weekweergave met tijdblokken ----------
+  function tekenWeek() {
+    const ma = maandagVan(gekozen);
+    const zo = plusDagen(ma, 6);
+    const d1 = ontleed(ma), d2 = ontleed(zo);
+    const smal = smalScherm();
+    const idx = smal ? (weekendTonen ? [5, 6] : [0, 1, 2, 3, 4]) : [0, 1, 2, 3, 4, 5, 6];
+    const datums = idx.map((i) => plusDagen(ma, i));
+    const perDag = datums.map((d) => blokkenVan(eigenOp(d).filter((o) => !isTodo(o))));
+    const bereik = urenBereik([].concat.apply([], perDag));
+    const v = vandaag();
+    const titel = d1.getMonth() === d2.getMonth()
+      ? d1.getDate() + " – " + d2.getDate() + " " + MAANDEN[d2.getMonth()]
+      : d1.getDate() + " " + KORT[d1.getMonth()] + " – " + d2.getDate() + " " + KORT[d2.getMonth()];
+    const kortTitel = d1.getDate() + (d1.getMonth() === d2.getMonth() ? "" : " " + KORT[d1.getMonth()]) + "–" + d2.getDate() + " " + KORT[d2.getMonth()];
+
+    let kop = '<div class="wk-kop" style="--dagen:' + datums.length + '"><span></span>';
+    let heledag = '<div class="wk-heledag" style="--dagen:' + datums.length + '"><span class="wk-hoek">to-do</span>';
+    datums.forEach((d, i) => {
+      const dag = ontleed(d);
+      const vak = vakantieOp(d);
+      kop += '<button type="button" class="wk-dag' + (d === v ? " vandaag" : "") + (idx[i] >= 5 ? " weekend" : "") + (vak ? " vakantie" : "") + '" data-naar-dag="' + d + '" aria-label="' + langDatum(d) + ' openen">' +
+        '<span class="wd">' + DAGEN[idx[i]] + '</span><span class="nr">' + dag.getDate() + "</span></button>";
+      const vast = vastOp(d);
+      const todos = eigenOp(d).filter(isTodo);
+      heledag += '<div class="hd-cel' + (vak ? " vakantie" : "") + '">' +
+        (vak && (i === 0 || d === vak.start) ? '<span class="vaklabel">' + esc(vak.naam) + "</span>" : "") +
+        vast.map((x) => '<span class="hd-chip vast" style="--c:' + vastKleur(x.soort) + '" title="' + esc(x.titel) + '">' + slot() + "<span>" + esc(x.titel) + "</span></span>").join("") +
+        todos.map((o) => '<button type="button" class="hd-chip' + (o.klaar ? " klaar" : "") + '" data-bewerk="' + esc(o.id) + '" style="--c:' + agendaKleur(o.agenda) + '" title="' + esc(o.titel) + '"><span>' + esc(o.titel) + "</span></button>").join("") +
+        "</div>";
+    });
+    kop += "</div>";
+    heledag += "</div>";
+
+    let html = '<div class="dag-boven"><p class="groet"></p>' + modusKnop() + "</div>" +
+      navBalk(titel + " " + d2.getFullYear() + " · week " + weeknummer(d1), "Deze week", kortTitel) +
+      '<div class="weekblok">' + kop + heledag + rasterHtml(datums, perDag, bereik, "weekraster-tijd", false) + "</div>";
+
+    if (smal) {
+      const za = plusDagen(ma, 5), zon = plusDagen(ma, 6);
+      const samenvatting = (d) => {
+        const lijst = vastOp(d).map((x) => x.titel).concat(eigenOp(d).map((o) => (o.tijd ? o.tijd + " " : "") + o.titel));
+        return lijst.length ? esc(lijst[0]) + (lijst.length > 1 ? " +" + (lijst.length - 1) : "") : "vrij";
+      };
+      html += weekendTonen
+        ? '<button type="button" class="weekendstrook terug" data-weekend="0"><span class="ws-pijl">‹</span><span><strong>Maandag – vrijdag</strong></span></button>'
+        : '<button type="button" class="weekendstrook" data-weekend="1"><span class="ws-titel">Weekend</span><span class="ws-dagen">' +
+          '<span class="ws-dag"><b>za ' + ontleed(za).getDate() + "</b> " + samenvatting(za) + "</span>" +
+          '<span class="ws-dag"><b>zo ' + ontleed(zon).getDate() + "</b> " + samenvatting(zon) + '</span></span><span class="ws-pijl">›</span></button>';
+    }
+    $("hoofd").innerHTML = html;
+  }
+
+  // ---------- lijst (alles wat eraan komt) ----------
+  function tekenLijst() {
     const v = vandaag();
     const over7 = plusDagen(v, 7);
     const zicht = opdrachten.filter(zichtbaar).sort(opVolgorde);
-    const eerder = zicht.filter((o) => !o.klaar && o.datum < v);
+    const nogTeDoen = (o) => !isTodo(o) || !o.klaar;
+    const eerder = zicht.filter((o) => isTodo(o) && !o.klaar && o.datum < v);
     const nuDag = zicht.filter((o) => o.datum === v);
-    const komend = zicht.filter((o) => !o.klaar && o.datum > v && o.datum <= over7);
-    const later = zicht.filter((o) => !o.klaar && o.datum > over7);
-    const af = zicht.filter((o) => o.klaar && o.datum !== v).sort((a, b) => b.datum.localeCompare(a.datum));
+    const komend = zicht.filter((o) => nogTeDoen(o) && o.datum > v && o.datum <= over7);
+    const later = zicht.filter((o) => nogTeDoen(o) && o.datum > over7);
+    const af = zicht.filter((o) => isTodo(o) && o.klaar && o.datum !== v).sort((a, b) => b.datum.localeCompare(a.datum));
 
     const groep = (titel, lijst, extra, leeg) => '<section class="groep"><div class="groep-titel"><h3>' + titel + ' <span class="aantal">' + lijst.length + "</span></h3>" + (extra || "") + "</div>" +
       (lijst.length ? '<ul class="rijen">' + lijst.map((o) => rij(o, true)).join("") + "</ul>" : '<p class="leeg">' + (leeg || "Niets.") + "</p>") + "</section>";
 
-    let html = '<div class="balk"><h2>Opdrachten</h2></div>';
+    let html = '<div class="balk"><h2>Lijst</h2><span class="klein lijst-uitleg">Alles wat eraan komt</span></div>';
     if (!zicht.length) {
-      html += '<p class="leeg groot-leeg">Nog geen opdrachten. Typ hierboven bijvoorbeeld <em>“morgen 14:00 tandarts”</em> en druk op Enter.</p>';
+      html += '<p class="leeg groot-leeg">Nog niets gepland. Typ hierboven bijvoorbeeld <em>“morgen 14:00-15:00 tandarts”</em> en druk op Enter.</p>';
     } else {
       if (eerder.length) html += groep("Nog open van eerder", eerder, '<button type="button" class="mini" data-alles-vandaag>Alles naar vandaag</button>');
       html += groep("Vandaag", nuDag, "", "Niets voor vandaag.");
@@ -385,6 +562,37 @@
     }
     $("hoofd").innerHTML = html;
   }
+
+  // Elke halve minuut: rode nu-lijn, afgelopen blokken en de Nu/Hierna-kaart bijwerken
+  let laatsteDag = vandaag();
+  function werkNuBij() {
+    const v = vandaag();
+    if (v !== laatsteDag) {
+      laatsteDag = v;
+      if (!venster.open && !inst.open) { if (voorkeur.weergave === "dag" && gekozen === plusDagen(v, -1)) gekozen = v; tekenAlles(); }
+      return;
+    }
+    const nm = nuMinuten();
+    document.querySelectorAll('.kolom[data-tijdlijn-datum="' + v + '"]').forEach((k) => {
+      const b = +k.dataset.begin, e = +k.dataset.eind;
+      let lijn = k.querySelector(".nu-lijn");
+      if (nm < b * 60 || nm >= e * 60) { if (lijn) lijn.remove(); }
+      else {
+        if (!lijn) { lijn = document.createElement("div"); lijn.className = "nu-lijn"; lijn.setAttribute("aria-hidden", "true"); if (k.dataset.metTijd) lijn.appendChild(document.createElement("span")); k.appendChild(lijn); }
+        lijn.style.top = "calc(var(--uurh) * " + ((nm - b * 60) / 60).toFixed(4) + ")";
+        const sp = lijn.querySelector("span");
+        if (sp) sp.textContent = klok(nm);
+      }
+      k.querySelectorAll(".blok").forEach((bl) => {
+        const s = +bl.dataset.s, en = +bl.dataset.e;
+        bl.classList.toggle("voorbij", en <= nm);
+        bl.classList.toggle("bezig", s <= nm && nm < en);
+      });
+    });
+    const kaart = $("nuKaart");
+    if (kaart) kaart.innerHTML = nuKaartInhoud();
+  }
+  setInterval(werkNuBij, 30000);
 
   // ---------- zijpaneel bij de maand ----------
   function tekenDagpaneel() {
@@ -418,9 +626,9 @@
   function tekenOpenBalk() {
     const el = $("openBalk");
     const open = nogOpen();
-    if (!open.length || voorkeur.openGezien === vandaag() || voorkeur.weergave === "opdrachten" || (sessie && !ontgrendeld)) { el.hidden = true; return; }
+    if (!open.length || voorkeur.openGezien === vandaag() || voorkeur.weergave === "lijst" || (sessie && !ontgrendeld)) { el.hidden = true; return; }
     el.hidden = false;
-    el.innerHTML = "<p>Je hebt <strong>" + open.length + "</strong> opdracht" + (open.length === 1 ? "" : "en") + " van eerdere dagen die nog " + (open.length === 1 ? "openstaat" : "openstaan") + ".</p>" +
+    el.innerHTML = "<p>Je hebt <strong>" + open.length + "</strong> to-do" + (open.length === 1 ? "" : "’s") + " van eerdere dagen die nog " + (open.length === 1 ? "openstaat" : "openstaan") + ".</p>" +
       '<div class="knoppen"><button type="button" class="hoofd" data-open="bekijk">Bekijken</button><button type="button" class="zacht" data-open="later">Later</button></div>';
   }
 
@@ -444,7 +652,7 @@
     if (w === "maand") { tekenMaand(); tekenDagpaneel(); tekenZonderDatum(); }
     else if (w === "week") tekenWeek();
     else if (w === "dag") tekenDag();
-    else tekenOpdrachten();
+    else tekenLijst();
   }
 
   function tekenAlles() {
@@ -490,7 +698,7 @@
   // ---------- snelle invoer ----------
   const snel = $("snelInvoer");
   function standaardDatum() {
-    return voorkeur.weergave === "opdrachten" ? vandaag() : gekozen;
+    return voorkeur.weergave === "lijst" ? vandaag() : gekozen;
   }
   function snelResultaten() {
     const opties = { standaardDatum: standaardDatum(), standaardAgenda: voorkeur.snelAgenda || instellingen.agendas[0] };
@@ -501,7 +709,8 @@
   }
   function beschrijf(r) {
     const delen = [dagKort(r.datum) + (r.datumHerkend ? "" : (r.datum === vandaag() ? " (vandaag)" : " (gekozen dag)"))];
-    if (r.tijd) delen.push(r.tijd);
+    if (r.tijd) delen.push(r.tijd + (r.eind ? "–" + r.eind : ""));
+    else delen.push(r.eind ? "to-do tot " + r.eind : "to-do");
     if (instellingen.agendas.length > 1 || r.agendaUit) delen.push(AGENDA_NAAM[r.agenda]);
     if (r.soort !== "opdracht") delen.push(SOORT_LABEL[r.soort]);
     return delen;
@@ -522,7 +731,7 @@
       return;
     }
     const goed = lijst.filter((r) => r.titel);
-    el.innerHTML = "<strong>" + goed.length + " opdrachten</strong> worden toegevoegd:" +
+    el.innerHTML = "<strong>" + goed.length + " items</strong> worden toegevoegd:" +
       '<ul class="voorbeeldlijst">' + goed.slice(0, 6).map((r) => "<li>" + esc(r.titel) + ' <span class="klein">' + esc(beschrijf(r).join(" · ")) + "</span></li>").join("") +
       (goed.length > 6 ? '<li class="klein">en nog ' + (goed.length - 6) + "…</li>" : "") + "</ul>" +
       (goed.length < lijst.length ? '<p class="klein">' + (lijst.length - goed.length) + " regel(s) zonder titel worden overgeslagen.</p>" : "") +
@@ -536,7 +745,7 @@
     if (sessie && !ontgrendeld) { tekenVoorbeeld(); return; }
     const lijst = snelResultaten().filter((r) => r.titel);
     if (!lijst.length) { tekenVoorbeeld(); snel.focus(); return; }
-    const nieuw = lijst.map((r) => normaal({ id: nieuwId() + Math.random().toString(36).slice(2, 4), titel: r.titel, datum: r.datum, tijd: r.tijd, soort: r.soort, agenda: r.agenda, notitie: "", klaar: false }));
+    const nieuw = lijst.map((r) => normaal({ id: nieuwId() + Math.random().toString(36).slice(2, 4), titel: r.titel, datum: r.datum, tijd: r.tijd, eind: r.eind, soort: r.soort, agenda: r.agenda, notitie: "", klaar: false }));
     // agenda die uit stond: aanzetten, anders zie je de opdracht niet
     let aangezet = false;
     nieuw.forEach((o) => { if (!agendaAan(o.agenda)) { instellingen.agendas = AGENDAS.filter((a) => a === o.agenda || instellingen.agendas.includes(a)); aangezet = true; } voorkeur.verborgen = voorkeur.verborgen.filter((a) => a !== o.agenda); });
@@ -548,7 +757,7 @@
     tekenVoorbeeld();
     opslaan(nieuw.map((o) => o.id));
     const ids = nieuw.map((o) => o.id);
-    toast(nieuw.length === 1 ? "Toegevoegd op " + dagKort(nieuw[0].datum) + (nieuw[0].tijd ? " om " + nieuw[0].tijd : "") : nieuw.length + " opdrachten toegevoegd", () => {
+    toast(nieuw.length === 1 ? "Toegevoegd op " + dagKort(nieuw[0].datum) + (nieuw[0].tijd ? " om " + tijdTekst(nieuw[0]) : (nieuw[0].eind ? ", " + tijdTekst(nieuw[0]) : "")) : nieuw.length + " items toegevoegd", () => {
       opdrachten = opdrachten.filter((o) => !ids.includes(o.id));
       opslaan([], ids);
     });
@@ -563,28 +772,43 @@
   // ---------- venster: opdracht toevoegen / wijzigen ----------
   const venster = $("venster");
   let verwijderStap = 0;
-  function openVenster(id, datum) {
+  function openVenster(id, datum, tijd) {
     if (sessie && !ontgrendeld) { toast("Ontgrendel eerst je account."); return; }
     bewerkId = id || null;
     verwijderStap = 0;
     const o = id ? opdrachten.find((x) => x.id === id) : null;
-    $("venstertitel").textContent = o ? "Opdracht wijzigen" : "Opdracht toevoegen";
+    $("venstertitel").textContent = o ? (isTodo(o) ? "To-do wijzigen" : "Afspraak wijzigen") : (tijd ? "Afspraak toevoegen" : "Toevoegen");
     $("f-titel").value = o ? o.titel : "";
     $("f-datum").value = o ? o.datum : (datum || gekozen);
-    $("f-tijd").value = o && o.tijd ? o.tijd : "";
+    $("f-tijd").value = o && o.tijd ? o.tijd : (tijd || "");
+    $("f-eind").value = o && o.eind ? o.eind : (tijd ? klok(Math.min(minuten(tijd) + 60, 23 * 60 + 59)) : "");
+    vorigeBegin = $("f-tijd").value;
     const agendaLijst = AGENDAS.filter((a) => agendaAan(a) || (o && o.agenda === a));
     $("f-agenda").innerHTML = agendaLijst.map((a) => '<option value="' + a + '">' + AGENDA_NAAM[a] + "</option>").join("");
     $("f-agenda").value = o ? o.agenda : (voorkeur.snelAgenda && agendaAan(voorkeur.snelAgenda) ? voorkeur.snelAgenda : instellingen.agendas[0]);
     $("f-agenda-rij").hidden = agendaLijst.length < 2;
-    $("f-soort").value = o ? o.soort : "opdracht";
+    $("f-soort").value = o ? o.soort : (tijd ? "afspraak" : "opdracht");
     $("f-notitie").value = o ? (o.notitie || "") : "";
     $("f-klaar").checked = o ? !!o.klaar : false;
+    $("f-klaar-rij").hidden = !!$("f-tijd").value;
     $("f-fout").textContent = "";
     $("f-verwijder").hidden = !o;
     $("f-verwijder").textContent = "Verwijderen";
     if (typeof venster.showModal === "function") venster.showModal(); else venster.setAttribute("open", "");
     $("f-titel").focus();
   }
+  // Begintijd verschuift: eindtijd schuift mee (zelfde duur). Afvinken kan alleen bij to-do's.
+  let vorigeBegin = "";
+  $("f-tijd").addEventListener("change", () => {
+    const nieuw = $("f-tijd").value, eind = $("f-eind").value;
+    if (vorigeBegin && nieuw && TIJD.test(eind) && TIJD.test(vorigeBegin)) {
+      const e = minuten(eind) + minuten(nieuw) - minuten(vorigeBegin);
+      if (e > minuten(nieuw) && e < 24 * 60) $("f-eind").value = klok(e);
+    }
+    vorigeBegin = nieuw;
+    $("f-klaar-rij").hidden = !!nieuw;
+  });
+  $("f-tijd").addEventListener("input", () => { $("f-klaar-rij").hidden = !!$("f-tijd").value; });
   function sluitVenster() { if (typeof venster.close === "function") venster.close(); else venster.removeAttribute("open"); }
 
   $("formulier").addEventListener("submit", (e) => {
@@ -593,8 +817,10 @@
     const datum = $("f-datum").value;
     if (!titel) { $("f-fout").textContent = "Vul een titel in."; $("f-titel").focus(); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) { $("f-fout").textContent = "Kies een datum."; $("f-datum").focus(); return; }
-    const tijd = $("f-tijd").value;
-    const gegevens = { titel, datum, tijd: /^\d{2}:\d{2}$/.test(tijd) ? tijd : null, soort: $("f-soort").value, agenda: $("f-agenda").value || instellingen.agendas[0], notitie: $("f-notitie").value.trim(), klaar: $("f-klaar").checked };
+    const tijd = TIJD.test($("f-tijd").value) ? $("f-tijd").value : null;
+    const eind = TIJD.test($("f-eind").value) ? $("f-eind").value : null;
+    if (tijd && eind && eind <= tijd) { $("f-fout").textContent = "De eindtijd moet na de begintijd liggen."; $("f-eind").focus(); return; }
+    const gegevens = { titel, datum, tijd, eind, soort: $("f-soort").value, agenda: $("f-agenda").value || instellingen.agendas[0], notitie: $("f-notitie").value.trim(), klaar: tijd ? false : $("f-klaar").checked };
     let id = bewerkId;
     if (bewerkId) {
       const o = opdrachten.find((x) => x.id === bewerkId);
@@ -652,11 +878,12 @@
   }
   function zetWeergave(w) {
     if (!WEERGAVEN.includes(w)) return;
+    const anders = voorkeur.weergave !== w;
     voorkeur.weergave = w;
-    bewaarVoorkeur();
     if (w === "maand") { const d = ontleed(gekozen); maand = { j: d.getFullYear(), m: d.getMonth() }; }
     tekenAlles();
     tekenVoorbeeld();
+    if (anders && telefoon()) window.scrollTo(0, 0);
   }
   function navigeer(stap) {
     const w = voorkeur.weergave;
@@ -670,11 +897,24 @@
   document.querySelectorAll("[data-weergave]").forEach((b) => b.addEventListener("click", () => zetWeergave(b.dataset.weergave)));
 
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-klaar],[data-bewerk],[data-nieuw],[data-schuif],[data-nav],[data-naar-dag],[data-filter],[data-open],[data-alles-vandaag],.chip.eigen,.dag,[data-j]");
+    const t = e.target.closest("[data-klaar],[data-bewerk],[data-nieuw],[data-schuif],[data-nav],[data-naar-dag],[data-filter],[data-open],[data-alles-vandaag],[data-onder],[data-modus],[data-kies],[data-slot],[data-weekend],.chip.eigen,.dag,[data-j]");
     if (!t) return;
     if (t.closest("#venster")) return;
-    if (t.matches(".chip.eigen")) { e.stopPropagation(); kiesDag(t.closest(".dag").dataset.datum); openVenster(t.dataset.id); return; }
-    if (t.matches(".dag")) { kiesDag(t.dataset.datum); return; }
+    // Maand: op de telefoon opent een dag de dagweergave, op de laptop het zijpaneel
+    if (t.matches(".chip.eigen") || t.matches(".dag")) {
+      const cel = t.closest(".dag");
+      if (telefoon()) { gekozen = cel.dataset.datum; return zetWeergave("dag"); }
+      if (t.matches(".chip.eigen")) { e.stopPropagation(); kiesDag(cel.dataset.datum); openVenster(t.dataset.id); return; }
+      kiesDag(cel.dataset.datum); return;
+    }
+    if (t.dataset.onder) {
+      if (t.dataset.onder === "vandaag") { gekozen = vandaag(); const d = new Date(); maand = { j: d.getFullYear(), m: d.getMonth() }; weekendTonen = false; return zetWeergave("dag"); }
+      return zetWeergave(t.dataset.onder);
+    }
+    if (t.dataset.modus) { if (t.dataset.modus === "week") weekendTonen = ontleed(gekozen).getDay() % 6 === 0; return zetWeergave(t.dataset.modus); }
+    if (t.dataset.kies) { gekozen = t.dataset.kies; tekenHoofd(); tekenVoorbeeld(); return; }
+    if (t.dataset.slot) { const [d, tijd] = t.dataset.slot.split("|"); return openVenster(null, d, tijd); }
+    if (t.dataset.weekend) { weekendTonen = t.dataset.weekend === "1"; return tekenHoofd(); }
     if (t.dataset.j !== undefined && t.closest("#jaarstrook")) { maand = { j: +t.dataset.j, m: +t.dataset.m }; tekenJaarstrook(); tekenHoofd(); return; }
     if (t.dataset.klaar) return wisselKlaar(t.dataset.klaar);
     if (t.dataset.schuif) return schuif(t.dataset.schuif);
@@ -687,7 +927,7 @@
       voorkeur.verborgen = voorkeur.verborgen.includes(a) ? voorkeur.verborgen.filter((x) => x !== a) : voorkeur.verborgen.concat(a);
       bewaarVoorkeur(); tekenAlles(); return;
     }
-    if (t.dataset.open === "bekijk") { voorkeur.openGezien = vandaag(); bewaarVoorkeur(); return zetWeergave("opdrachten"); }
+    if (t.dataset.open === "bekijk") { voorkeur.openGezien = vandaag(); bewaarVoorkeur(); return zetWeergave("lijst"); }
     if (t.dataset.open === "later") { voorkeur.openGezien = vandaag(); bewaarVoorkeur(); tekenOpenBalk(); return; }
     if (t.hasAttribute("data-alles-vandaag")) return allesNaarVandaag();
   });
@@ -716,8 +956,10 @@
   function openInstellingen(focusAccount) {
     accountPlek = $("inst-account");
     $("welkom-account").innerHTML = "";
+    if (!pushBezig) { pushMelding = ""; pushFout = false; }
     tekenAccount();
     tekenInstellingen();
+    pushControleren();
     if (typeof inst.showModal === "function") inst.showModal(); else inst.setAttribute("open", "");
     if (focusAccount) { const v = inst.querySelector("#acc-naam, [data-actie]"); if (v) v.focus(); }
   }
@@ -745,6 +987,7 @@
   }
 
   function tekenInstellingen() {
+    tekenMeldingen();
     // Agenda's
     $("inst-agendas").innerHTML = "<h4>Agenda’s</h4>" +
       '<div class="agenda-keuze">' + agendaKeuzeHtml("inst-ag", instellingen.agendas) + "</div>" +
@@ -792,6 +1035,119 @@
     tekenInstellingen();
   }
 
+  // ---------- meldingen (pushberichten op telefoon en laptop) ----------
+  const PUSH_VLAG = "digigenda-meldingen-v1";   // wie op dit apparaat meldingen heeft aangezet
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const losseApp = () => !!((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true);
+  const pushKan = () => !!(window.isSecureContext && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
+  let pushAan = false, pushMelding = "", pushFout = false, pushBezig = false;
+
+  function naarBytes(s) {
+    const t = s.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(t + "===".slice((t.length + 3) % 4));
+    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  }
+  async function huidigAbonnement() {
+    if (!pushKan()) return null;
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      return reg ? await reg.pushManager.getSubscription() : null;
+    } catch (e) { return null; }
+  }
+  async function pushControleren() {
+    const sub = await huidigAbonnement();
+    pushAan = !!sub && !!sessie && laad(PUSH_VLAG, "") === sessie.naam;
+    if (inst.open) tekenMeldingen();
+  }
+  // Bij openen en na inloggen: dit apparaat opnieuw aan het (nieuwe) inlogbewijs koppelen
+  async function pushVernieuwen() {
+    if (!actief() || !pushKan() || Notification.permission !== "granted" || laad(PUSH_VLAG, "") !== sessie.naam) return;
+    const sub = await huidigAbonnement();
+    if (!sub) { weg(PUSH_VLAG); return; }
+    try { const r = await CLOUD.pushAanmelden(sessie.token, sub.toJSON()); if (r && r.ok) pushAan = true; } catch (e) { /* later opnieuw */ }
+  }
+  async function meldingenAanzetten() {
+    if (!actief() || pushBezig) return;
+    pushBezig = true; pushFout = false; pushMelding = "Toestemming vragen…"; tekenMeldingen();
+    try {
+      const toestemming = await Notification.requestPermission();
+      if (toestemming !== "granted") {
+        throw new Error(toestemming === "denied"
+          ? "Je hebt meldingen geblokkeerd. Zet ze aan bij de instellingen van je " + (ios ? "iPhone (Instellingen → Meldingen → Digigenda)" : "browser (slotje naast het adres)") + " en probeer het opnieuw."
+          : "Je hebt (nog) geen toestemming gegeven.");
+      }
+      pushMelding = "Aanzetten…"; tekenMeldingen();
+      if (!(await navigator.serviceWorker.getRegistration())) await navigator.serviceWorker.register("sw.js");
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: naarBytes(CLOUD.VAPID) });
+      controleer(await CLOUD.pushAanmelden(sessie.token, sub.toJSON()));
+      bewaar(PUSH_VLAG, sessie.naam);
+      pushAan = true;
+      pushMelding = "Meldingen staan aan op dit apparaat. Stuur een testmelding om te kijken of het werkt.";
+    } catch (fout) {
+      pushBezig = false;
+      if (fout.verlopen) { sluitInstellingen(); return sessieVerlopen(); }
+      pushFout = true;
+      pushMelding = fout && fout.name === "Error" ? fout.message : "Aanzetten is niet gelukt (" + ((fout && fout.name) || "fout") + "). Probeer het nog eens.";
+    }
+    pushBezig = false;
+    tekenMeldingen();
+  }
+  async function meldingenUitzetten() {
+    if (pushBezig) return;
+    pushBezig = true; tekenMeldingen();
+    const sub = await huidigAbonnement();
+    if (sub) {
+      if (actief()) { try { await CLOUD.pushAfmelden(sessie.token, sub.endpoint); } catch (e) { /* niets */ } }
+      try { await sub.unsubscribe(); } catch (e) { /* niets */ }
+    }
+    weg(PUSH_VLAG);
+    pushAan = false; pushBezig = false; pushFout = false;
+    pushMelding = "Meldingen staan uit op dit apparaat.";
+    tekenMeldingen();
+  }
+  async function testMelding() {
+    if (!actief() || pushBezig) return;
+    pushBezig = true; pushFout = false; pushMelding = "Testmelding versturen…"; tekenMeldingen();
+    try {
+      const r = await CLOUD.testMelding(sessie.token);
+      if (r && r.sessie === false) { pushBezig = false; sluitInstellingen(); return sessieVerlopen(); }
+      if (!r || !r.ok) throw new Error((r && r.fout) || "Versturen is niet gelukt.");
+      if (!r.gelukt) throw new Error("De meldingendienst van je toestel nam de melding niet aan. Zet meldingen uit en weer aan.");
+      pushMelding = "Testmelding verstuurd. Komt hij niet binnen? Kijk of meldingen voor Digigenda aanstaan in de instellingen van je toestel.";
+    } catch (e) { pushFout = true; pushMelding = e.message || "Versturen is niet gelukt."; }
+    pushBezig = false;
+    tekenMeldingen();
+  }
+  function tekenMeldingen() {
+    const el = $("inst-meldingen");
+    if (!el) return;
+    if (!window.CLOUD || !CLOUD.aan) { el.innerHTML = ""; return; }
+    const uit = pushBezig ? " disabled" : "";
+    let h = "<h4>Meldingen</h4>";
+    if (!actief()) {
+      h += '<p class="klein">Log eerst in. Dan krijg je een seintje 15 minuten vóór een afspraak en elke ochtend om 07:30 een overzicht van je dag.</p>';
+    } else if (!pushKan()) {
+      h += ios && !losseApp()
+        ? '<p class="klein">Op de iPhone werken meldingen alleen als Digigenda <strong>op je beginscherm</strong> staat (iOS 16.4 of nieuwer). Zet hem daar eerst op (zie hieronder), open Digigenda vanaf je beginscherm en zet meldingen dan hier aan.</p>'
+        : '<p class="klein">Deze browser kan geen meldingen ontvangen. Probeer Safari, Chrome, Edge of Firefox.</p>';
+    } else if (!pushAan && Notification.permission === "denied") {
+      h += '<p class="klein te-laat">Meldingen zijn geblokkeerd voor Digigenda.</p><p class="klein">' +
+        (ios ? "Ga naar <em>Instellingen → Meldingen → Digigenda</em> en zet <em>Sta meldingen toe</em> aan." : "Klik op het slotje naast het adres en zet <em>Meldingen</em> op <em>Toestaan</em>.") + "</p>";
+    } else if (!pushAan) {
+      h += '<p class="klein">Krijg een seintje 15 minuten vóór een afspraak en elke ochtend om 07:30 een overzicht van je dag.</p>' +
+        '<div class="knoppen"><button type="button" class="hoofd" data-push="aan"' + uit + ">Meldingen aanzetten</button></div>";
+    } else {
+      h += '<p class="klein">Meldingen staan aan op dit apparaat. Deze keuzes gelden voor al je apparaten:</p>' +
+        '<label class="vink-label"><input type="checkbox" id="push-ochtend"' + (instellingen.meldingen.ochtend ? " checked" : "") + "><span>Ochtendoverzicht om 07:30</span></label>" +
+        '<label class="vink-label"><input type="checkbox" id="push-afspraak"' + (instellingen.meldingen.afspraak ? " checked" : "") + "><span>15 minuten vóór een afspraak</span></label>" +
+        '<div class="knoppen"><button type="button" class="zacht" data-push="test"' + uit + '>Testmelding sturen</button><button type="button" class="zacht" data-push="uit"' + uit + ">Uitzetten op dit apparaat</button></div>";
+    }
+    if (pushMelding) h += '<p class="klein' + (pushFout ? " te-laat" : "") + '" role="status">' + esc(pushMelding) + "</p>";
+    el.innerHTML = h;
+  }
+
   let installPrompt = null;
   window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installPrompt = e; if (inst.open) tekenInstellingen(); });
 
@@ -805,10 +1161,18 @@
       bewaarVoorkeur(); bewaarInstellingen(); tekenAlles();
     }
     if (t.id === "inst-pabo") { instellingen.pabo = t.checked; bewaarInstellingen(); tekenAlles(); }
+    if (t.id === "push-ochtend" || t.id === "push-afspraak") {
+      instellingen.meldingen[t.id === "push-ochtend" ? "ochtend" : "afspraak"] = t.checked;
+      bewaarInstellingen();
+      pushFout = false; pushMelding = "Opgeslagen."; tekenMeldingen();
+    }
   });
   inst.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-dg],[data-link],[data-installeer]");
+    const t = e.target.closest("[data-dg],[data-link],[data-installeer],[data-push]");
     if (!t) return;
+    if (t.dataset.push === "aan") return meldingenAanzetten();
+    if (t.dataset.push === "uit") return meldingenUitzetten();
+    if (t.dataset.push === "test") return testMelding();
     if (t.dataset.dg && t.dataset.dgPlek === "inst") { instellingen.doelgroep = t.dataset.dg; bewaarInstellingen(); tekenAlles(); }
     if (t.dataset.link === "maak") agendaLinkActie(false);
     if (t.dataset.link === "nieuw") agendaLinkActie(true);
@@ -1028,6 +1392,7 @@
       : "";
     const welkomOpen = !$("welkom").hidden;
     if (welkomOpen) sluitWelkom(); else tekenAlles();
+    pushVernieuwen();
     await synchroniseer();
   }
 
@@ -1068,6 +1433,7 @@
       laadEigen();
       tekenAlles();
       vernieuw();
+      pushVernieuwen();
     } catch (e) {
       accountMelding = "Ontgrendelen met " + BIO.naam + " is niet gelukt. Probeer het opnieuw of gebruik je pincode.";
       accountFout = true;
@@ -1111,6 +1477,8 @@
 
   function lokaalUitloggen(melding) {
     const naam = sessie ? sessie.naam : "";
+    huidigAbonnement().then((sub) => { if (sub) sub.unsubscribe().catch(() => {}); });
+    weg(PUSH_VLAG); pushAan = false; pushMelding = "";
     weg(SESSIE); weg(CACHE + naam); weg(WACHT + naam);
     sessie = null; ontgrendeld = false; uitlogStap = 0; overalStap = 0; pinFormulier = false; agendaLink = null; linkMelding = "";
     syncStatus = ""; formModus = "inloggen";
@@ -1251,7 +1619,7 @@
     else if (actie === "pin-annuleer") { pinFormulier = false; accountMelding = ""; tekenAccount(); }
   });
 
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { vernieuw(); tekenOpenBalk(); } });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { vernieuw(); tekenOpenBalk(); werkNuBij(); } });
   window.addEventListener("online", () => vernieuw());
 
   // ---------- back-up ----------
@@ -1302,6 +1670,17 @@
   if (window.BIO) BIO.beschikbaar().then((ja) => { bioMogelijk = ja; if (accountPlek) tekenAccount(); });
   vernieuw();
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").then(() => pushVernieuwen()).catch(() => {}));
+    // Tik op een melding terwijl de app al open is: naar vandaag
+    navigator.serviceWorker.addEventListener("message", (e) => {
+      if (e.data && e.data.type === "naar-vandaag") { gekozen = vandaag(); weekendTonen = false; zetWeergave("dag"); }
+    });
+  }
+  // Schermbreedte verandert (draaien, venster smaller): week en maand opnieuw tekenen
+  if (window.matchMedia) {
+    const opnieuw = () => { if (voorkeur.weergave === "week" || voorkeur.weergave === "maand") tekenHoofd(); };
+    [window.matchMedia("(max-width: 760px)"), window.matchMedia("(max-width: 640px)")].forEach((m) => {
+      if (m.addEventListener) m.addEventListener("change", opnieuw); else if (m.addListener) m.addListener(opnieuw);
+    });
   }
 })();

@@ -1,0 +1,22 @@
+const { chromium } = require(process.env.PLAYWRIGHT_PAD || "playwright");
+(async () => {
+  const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PAD || undefined });
+  const ctx = await b.newContext();
+  await ctx.grantPermissions(["notifications"], { origin: "http://localhost:8766" });
+  await ctx.route("https://**", (r) => r.abort());
+  const p = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(p);
+  let regId = null;
+  cdp.on("ServiceWorker.workerRegistrationUpdated", (e) => { e.registrations.forEach((r) => { if (r.scopeURL.startsWith("http://localhost:8766")) regId = r.registrationId; }); });
+  await cdp.send("ServiceWorker.enable");
+  await p.goto((process.env.BASIS || "http://localhost:8766/")); await p.waitForTimeout(1500);
+  await p.evaluate(() => navigator.serviceWorker.ready);
+  console.log("registratie:", regId);
+  await cdp.send("ServiceWorker.deliverPushMessage", { origin: "http://localhost:8766", registrationId: regId, data: JSON.stringify({ titel: "Stage-overleg", tekst: "Om 10:00 tot 11:00 · over 15 min", tag: "af:x:2026-10-22:10:00", url: "x" }) });
+  await p.waitForTimeout(800);
+  await cdp.send("ServiceWorker.deliverPushMessage", { origin: "http://localhost:8766", registrationId: regId, data: "geen json" });
+  await p.waitForTimeout(800);
+  const n = await p.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications()).map((x) => ({ titel: x.title, tekst: x.body, tag: x.tag })));
+  console.log(JSON.stringify(n, null, 1));
+  await b.close();
+})();

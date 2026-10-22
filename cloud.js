@@ -1,5 +1,5 @@
 /*
-  Online opslag via Supabase (inloggen met gebruikersnaam + pincode).
+  Digigenda: online opslag via Supabase (inloggen met gebruikersnaam + pincode).
 
   - De sleutel hieronder is de PUBLIEKE sleutel van het project. Die mag in de
     code staan: de website kan er alleen de kal_-functies mee aanroepen, en die
@@ -35,7 +35,11 @@ window.CLOUD = (function () {
     lijst: (token) => rpc("kal_lijst", { p_token: token }),
     bewaar: (token, lijst) => rpc("kal_bewaar", { p_token: token, p_lijst: lijst }),
     verwijder: (token, id) => rpc("kal_verwijder", { p_token: token, p_id: id }),
-    uitloggen: (token) => rpc("kal_uitloggen", { p_token: token })
+    uitloggen: (token) => rpc("kal_uitloggen", { p_token: token }),
+    instellingen: (token, inst) => rpc("kal_instellingen", { p_token: token, p_instellingen: inst }),
+    agendaLink: (token, nieuw) => rpc("kal_agenda_link", { p_token: token, p_nieuw: !!nieuw }),
+    // Adres voor het agenda-abonnement (iPhone/Mac Agenda, Google Agenda)
+    agendaUrl: (code) => URL + "/functions/v1/digigenda-agenda?code=" + encodeURIComponent(code)
   };
 })();
 
@@ -71,7 +75,7 @@ window.BIO = (function () {
     const cred = await navigator.credentials.create({
       publicKey: {
         challenge: willekeurig(32),
-        rp: { name: "Pabo 3 Kalender" },
+        rp: { name: "Digigenda" },
         user: { id: willekeurig(16), name: gebruiker, displayName: gebruiker },
         pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
         authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "discouraged" },

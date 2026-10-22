@@ -1,54 +1,65 @@
-# Pabo 3 Kalender
+# Digigenda
 
-Toetskalender voor HAN Pabo voltijd jaar 3 (studiejaar 2026–2027).
+Eén agenda voor school, werk en privé. Je typt je planning gewoon in je eigen woorden,
+bijvoorbeeld `morgen 14:00 tandarts` of `deadline portfolio rekenen 14 nov`.
+Gemaakt voor HAN Pabo jaar 3 (studiejaar 2026–2027), maar ook bruikbaar voor wie niet op de Pabo zit.
 
-- **Vaste toetsen, periodes en vakanties** staan voor iedereen in de kalender (met een slotje).
-- **Eigen opdrachten** zet je er zelf bij: klik op een dag en kies "+ Opdracht op deze dag".
-- Filter bovenaan op **jongere kind** of **oudere kind**.
+## Wat kan het?
+
+- **Startscherm:** kies welke agenda's je gebruikt (School, Werk, Persoonlijk) en of je het HAN Pabo 3-toetsrooster wilt zien.
+- **Snel invoeren:** één regel typen en Enter. De volgorde maakt niet uit. Je ziet vooraf hoe Digigenda het begrijpt.
+  - dagen: vandaag, morgen, overmorgen, maandag…zondag, ma…zo, volgende week (dinsdag), over 3 dagen, 14 nov, 14-11, 14/11
+  - tijden: 14:00, om 14.30, 14u, 9u30, 9 uur, om 9
+  - agenda: `#school`, `#werk`, `#prive`
+  - soort: de woorden deadline, toets, herkansing en afspraak
+  - meerdere regels plakken = meerdere opdrachten tegelijk
+- **Weergaven:** Maand (standaard), Week, Dag en een apart kopje Opdrachten.
+- **Openstaande opdrachten** van eerdere dagen blijven gewoon staan, zonder rood label. Je schuift ze met één tik door
+  (→ vandaag / → morgen). Eén keer per dag krijg je een rustige melding als er nog iets openstaat.
+- **Als app op je beginscherm**, met eigen icoon en offline werken (iPhone: Safari → Deel → Zet op beginscherm).
+- **Koppelen aan je iPhone-agenda:** in de instellingen maak je een geheime agenda-link; je iPhone ververst die zelf, ongeveer elk uur.
 
 ## Waar worden mijn opdrachten bewaard?
 
-**Zonder account:** alleen in je eigen browser, op je eigen apparaat. Klasgenoten zien jouw opdrachten niet, en jij ziet die van hen niet.
-Wissel je van apparaat? Gebruik dan **Back-up downloaden** en op het andere apparaat **Back-up terugzetten**.
-Let op: als je je browsergegevens wist, ben je je opdrachten kwijt zonder back-up.
+**Zonder account:** alleen in je eigen browser, op je eigen apparaat. Gebruik **Back-up downloaden** om ze mee te nemen.
 
-**Met account (optioneel):** maak rechts in het paneel **Inloggen** een account met een gebruikersnaam en een pincode van 4 cijfers.
-Je opdrachten staan dan online en je ziet ze op elk apparaat waar je inlogt. Opdrachten die je al zonder account had, gaan automatisch mee.
+**Met account (optioneel):** gebruikersnaam + pincode van 4 cijfers. Je opdrachten staan dan online en je ziet ze op elk
+apparaat waar je inlogt. Opdrachten die je al zonder account had, gaan automatisch mee.
 
 - Na 5 foute pincodes wordt een account 15 minuten geblokkeerd.
-- Een pincode van 4 cijfers is geen sterke beveiliging. Zet er dus alleen studieplanning in, niets persoonlijks.
-- Pincode vergeten? Er is geen herstelknop. De beheerder kan je account in Supabase verwijderen, zodat je opnieuw kunt beginnen.
-
-**Face ID (iPhone) / vingerafdruk:** na het inloggen kun je in het accountpaneel Face ID aanzetten.
-Open je de kalender daarna op dat apparaat, dan ontgrendel je met Face ID in plaats van je pincode.
-Dit werkt alleen op de echte website (https), niet als je `index.html` als bestand opent.
-
-## Online opslag instellen (beheerder)
-
-1. Open in Supabase je project > **SQL Editor** > **New query**.
-2. Plak de inhoud van `supabase.sql` en klik op **Run**. Eén keer is genoeg.
-3. Zet in `cloud.js` de project-URL en de **publishable key** (Project Settings > API Keys).
-
-Wil je online opslaan uitzetten? Maak `SLEUTEL` in `cloud.js` leeg (`""`). De kalender werkt dan weer alleen met opslag in de browser.
+- Een pincode van 4 cijfers is geen sterke beveiliging. Zet er alleen planning in, niets persoonlijks of gevoeligs.
+- Pincode vergeten? Er is geen herstelknop; de beheerder kan je account in Supabase verwijderen.
+- **Face ID / vingerafdruk:** na het inloggen kun je in de instellingen Face ID aanzetten. Daarmee ontgrendel je je opgeslagen
+  inlog op dat apparaat. De pincode blijft de controle op de server.
 
 ## Toetsdata aanpassen
 
-Alle vaste gegevens staan in **`toetsen.js`**. Zodra een toetsdatum bekend is:
+Alle vaste Pabo-gegevens staan in **`toetsen.js`**. Zodra een toetsdatum bekend is:
 
 1. Open `toetsen.js` op GitHub en klik op het potlood (Edit).
 2. Haal de toets weg uit `zonderDatum` en zet hem in `toetsen`, met een datum als `"2026-12-08"`.
-3. Klik op **Commit changes**. Binnen een minuut staat het op de website.
+3. Klik op **Commit changes**. Binnen een minuut staat het op de website (en binnen een uur in iPhone-agenda's).
+
+## Beheer (Supabase)
+
+1. **Database:** Supabase > SQL Editor > New query > plak `supabase.sql` > Run. Nog een keer uitvoeren kan geen kwaad.
+2. **Agenda-koppeling:** de serverfunctie staat in `supabase/functions/digigenda-agenda/` (zonder JWT-controle;
+   de functie controleert zelf de geheime code).
+3. In `cloud.js` staan de project-URL en de publishable key. Maak `SLEUTEL` leeg om online opslaan uit te zetten.
 
 ## Bestanden
 
 | Bestand | Wat |
 |---|---|
 | `index.html` | De pagina |
-| `style.css` | Opmaak |
-| `app.js` | Werking van de kalender |
-| `toetsen.js` | Toetsen, periodes en vakanties (hier pas je data aan) |
+| `style.css` | Opmaak (licht en donker) |
+| `app.js` | Werking van de agenda |
+| `parse.js` | Snelle invoer: zet een getypte regel om in dag, tijd, agenda en titel |
 | `cloud.js` | Verbinding met Supabase (inloggen, online opslaan) en Face ID |
-| `supabase.sql` | Database-opzet voor Supabase (één keer uitvoeren) |
+| `toetsen.js` | Toetsen, periodes en vakanties van HAN Pabo 3 (hier pas je data aan) |
+| `sw.js`, `manifest.webmanifest`, `icons/` | App op je beginscherm en offline werken |
+| `supabase.sql` | Database-opzet voor Supabase |
+| `supabase/functions/digigenda-agenda/` | Serverfunctie voor het agenda-abonnement (.ics) |
 
 ## Bronnen
 

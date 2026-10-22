@@ -1,5 +1,5 @@
 -- =====================================================================
--- Pabo 3 Kalender: inloggen met gebruikersnaam + pincode (4 cijfers)
+-- Digigenda: inloggen met gebruikersnaam + pincode (4 cijfers), agenda's en agenda-koppeling
 --
 -- Hoe gebruik je dit?
 --   Supabase > je project > SQL Editor > New query > plak dit hele bestand > Run.
@@ -195,6 +195,146 @@ revoke all on function public.kal_registreer(text, text), public.kal_inloggen(te
 grant execute on function public.kal_registreer(text, text), public.kal_inloggen(text, text), public.kal_lijst(uuid),
   public.kal_bewaar(uuid, jsonb), public.kal_verwijder(uuid, text), public.kal_uitloggen(uuid) to anon, authenticated;
 
+-- ---------- Versie 2: tijd, agenda's, instellingen, agenda-link ----------
+alter table kalender.opdrachten add column if not exists tijd text;
+alter table kalender.opdrachten add column if not exists agenda text not null default 'school';
+alter table kalender.opdrachten drop constraint if exists opdrachten_soort_check;
+alter table kalender.opdrachten add constraint opdrachten_soort_check
+  check (soort in ('opdracht','deadline','herkansing','toets','afspraak','overig'));
+alter table kalender.opdrachten drop constraint if exists opdrachten_tijd_check;
+alter table kalender.opdrachten add constraint opdrachten_tijd_check
+  check (tijd is null or tijd ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$');
+alter table kalender.opdrachten drop constraint if exists opdrachten_agenda_check;
+alter table kalender.opdrachten add constraint opdrachten_agenda_check
+  check (agenda in ('school','werk','persoonlijk'));
+alter table kalender.gebruikers add column if not exists instellingen jsonb not null default '{}'::jsonb;
+alter table kalender.gebruikers add column if not exists agenda_code text unique;
+
+-- ---------- Versie 2: functies (vervangen die van versie 1) ----------
+create or replace function kalender.lijst_van(p_gebruiker uuid)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', o.id, 'titel', o.titel, 'datum', to_char(o.datum, 'YYYY-MM-DD'), 'tijd', o.tijd,
+    'soort', o.soort, 'agenda', o.agenda, 'notitie', o.notitie, 'klaar', o.klaar)
+    order by o.datum, o.tijd nulls first), '[]'::jsonb)
+  from kalender.opdrachten o where o.gebruiker_id = p_gebruiker;
+$$;
+
+create or replace function kalender.bewaar_een(p_gebruiker uuid, o jsonb)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if (select count(*) from kalender.opdrachten where gebruiker_id = p_gebruiker) >= 1000 then
+    raise exception 'te_veel';
+  end if;
+  insert into kalender.opdrachten (gebruiker_id, id, titel, datum, tijd, soort, agenda, notitie, klaar, bijgewerkt)
+  values (p_gebruiker, o->>'id', left(o->>'titel', 80), (o->>'datum')::date,
+          case when o->>'tijd' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' then o->>'tijd' else null end,
+          case when o->>'soort' in ('opdracht','deadline','herkansing','toets','afspraak','overig') then o->>'soort' else 'opdracht' end,
+          case when o->>'agenda' in ('school','werk','persoonlijk') then o->>'agenda' else 'school' end,
+          left(coalesce(o->>'notitie',''), 400), coalesce((o->>'klaar')::boolean, false), now())
+  on conflict (gebruiker_id, id) do update set
+    titel = excluded.titel, datum = excluded.datum, tijd = excluded.tijd, soort = excluded.soort,
+    agenda = excluded.agenda, notitie = excluded.notitie, klaar = excluded.klaar, bijgewerkt = now();
+end $$;
+
+create or replace function public.kal_registreer(p_naam text, p_pin text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare n text := lower(trim(p_naam)); g uuid;
+begin
+  if n !~ '^[a-z0-9]{3,20}$' then
+    return jsonb_build_object('ok', false, 'fout', 'Gebruikersnaam: 3 tot 20 letters of cijfers, zonder spaties.');
+  end if;
+  if p_pin !~ '^[0-9]{4}$' then
+    return jsonb_build_object('ok', false, 'fout', 'De pincode moet uit precies 4 cijfers bestaan.');
+  end if;
+  if exists (select 1 from kalender.gebruikers where naam = n) then
+    return jsonb_build_object('ok', false, 'fout', 'Deze gebruikersnaam is al bezet. Kies een andere of log in.');
+  end if;
+  insert into kalender.gebruikers (naam, pin_hash) values (n, extensions.crypt(p_pin, extensions.gen_salt('bf', 8)))
+  returning id into g;
+  perform kalender.zet_klaar(g, n);
+  return jsonb_build_object('ok', true, 'naam', n, 'token', kalender.nieuwe_sessie(g),
+    'opdrachten', kalender.lijst_van(g), 'instellingen', '{}'::jsonb);
+end $$;
+
+create or replace function public.kal_inloggen(p_naam text, p_pin text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare n text := lower(trim(p_naam)); u kalender.gebruikers%rowtype;
+begin
+  select * into u from kalender.gebruikers where naam = n;
+  if not found then
+    return jsonb_build_object('ok', false, 'fout', 'Gebruikersnaam of pincode klopt niet.');
+  end if;
+  if u.geblokkeerd_tot is not null and u.geblokkeerd_tot > now() then
+    return jsonb_build_object('ok', false, 'fout',
+      'Te vaak een verkeerde pincode. Probeer het over ' || ceil(extract(epoch from (u.geblokkeerd_tot - now())) / 60)::int || ' minuten opnieuw.');
+  end if;
+  if p_pin !~ '^[0-9]{4}$' or extensions.crypt(p_pin, u.pin_hash) <> u.pin_hash then
+    if u.mislukt + 1 >= 5 then
+      update kalender.gebruikers set mislukt = 0, geblokkeerd_tot = now() + interval '15 minutes' where id = u.id;
+      return jsonb_build_object('ok', false, 'fout', 'Vijf keer een verkeerde pincode. Je account is 15 minuten geblokkeerd.');
+    end if;
+    update kalender.gebruikers set mislukt = u.mislukt + 1 where id = u.id;
+    return jsonb_build_object('ok', false, 'fout', 'Gebruikersnaam of pincode klopt niet.');
+  end if;
+  update kalender.gebruikers set mislukt = 0, geblokkeerd_tot = null where id = u.id;
+  perform kalender.zet_klaar(u.id, n);
+  return jsonb_build_object('ok', true, 'naam', n, 'token', kalender.nieuwe_sessie(u.id),
+    'opdrachten', kalender.lijst_van(u.id), 'instellingen', u.instellingen);
+end $$;
+
+create or replace function public.kal_lijst(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := kalender.gebruiker_van(p_token); n text; i jsonb;
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  select naam, instellingen into n, i from kalender.gebruikers where id = g;
+  perform kalender.zet_klaar(g, n);
+  return jsonb_build_object('ok', true, 'naam', n, 'opdrachten', kalender.lijst_van(g), 'instellingen', i);
+end $$;
+
+-- Instellingen (welke agenda's, Pabo-toetsrooster, doelgroep) bewaren
+create or replace function public.kal_instellingen(p_token uuid, p_instellingen jsonb)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := kalender.gebruiker_van(p_token);
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  if jsonb_typeof(p_instellingen) <> 'object' or length(p_instellingen::text) > 2000 then
+    return jsonb_build_object('ok', false, 'fout', 'Ongeldige instellingen.');
+  end if;
+  update kalender.gebruikers set instellingen = p_instellingen where id = g;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Geheime link voor het agenda-abonnement (iPhone Agenda). p_nieuw = true maakt een nieuwe; de oude werkt dan niet meer.
+create or replace function public.kal_agenda_link(p_token uuid, p_nieuw boolean)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := kalender.gebruiker_van(p_token); c text;
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  select agenda_code into c from kalender.gebruikers where id = g;
+  if c is null or p_nieuw then
+    c := encode(extensions.gen_random_bytes(18), 'hex');
+    update kalender.gebruikers set agenda_code = c where id = g;
+  end if;
+  return jsonb_build_object('ok', true, 'code', c);
+end $$;
+
+-- Gegevens voor het agenda-abonnement, alleen op te vragen met de geheime code
+create or replace function public.kal_ics_data(p_code text)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare u kalender.gebruikers%rowtype;
+begin
+  if p_code is null or length(p_code) < 32 then return jsonb_build_object('ok', false); end if;
+  select * into u from kalender.gebruikers where agenda_code = p_code;
+  if not found then return jsonb_build_object('ok', false); end if;
+  return jsonb_build_object('ok', true, 'naam', u.naam, 'instellingen', u.instellingen, 'opdrachten', kalender.lijst_van(u.id));
+end $$;
+
+revoke all on all functions in schema kalender from public, anon, authenticated;
+revoke all on function public.kal_instellingen(uuid, jsonb), public.kal_agenda_link(uuid, boolean), public.kal_ics_data(text) from public;
+grant execute on function public.kal_instellingen(uuid, jsonb), public.kal_agenda_link(uuid, boolean), public.kal_ics_data(text) to anon, authenticated;
+
 -- ---------- Studieplanning casustoets Taal jongere kind (voor gebruikersnaam "gijs") ----------
 -- Verschijnt automatisch zodra "gijs" een account maakt of inlogt.
 insert into kalender.klaarzetten (naam, opdracht)
@@ -218,7 +358,7 @@ select 'gijs', x::jsonb from unnest(array[
 where not exists (select 1 from kalender.klaarzetten where naam = 'gijs')
   and not exists (select 1 from kalender.gebruikers where naam = 'gijs');
 
--- Controle: hier hoort 15 en 6 uit te komen.
+-- Controle: hier hoort (bij een nieuwe installatie) 15 en 9 uit te komen.
 select (select count(*) from kalender.klaarzetten) as klaargezet,
        (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
          where n.nspname = 'public' and p.proname like 'kal_%') as publieke_functies;

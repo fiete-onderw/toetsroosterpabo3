@@ -236,9 +236,17 @@ const check = (naam, ok, extra) => res.push((ok ? "PASS " : "FAIL ") + naam + (e
   check("Face ID aangezet", (await txt("#inst-account")).includes("staat aan"), await txt("#inst-account"));
   await page.click("#inst-sluit"); await w(100);
 
-  // 11. herladen: vergrendeld, ontgrendelen
+  // 11. herladen: binnen 15 minuten nog ontgrendeld, daarna vergrendeld
+  await page.clock.setFixedTime(new Date(NU.getTime() + 5 * 60000));
   await page.reload(); await w(400);
-  check("vergrendeld na herladen", await page.locator("#slotBalk").isVisible());
+  check("binnen 15 minuten: niet opnieuw Face ID", !(await page.locator("#slotBalk").isVisible()) && (await page.locator(".chip.eigen").count()) >= 3);
+  // naar de achtergrond, 20 minuten later terug: vergrendeld (ook na herladen)
+  await page.evaluate(() => { Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" }); document.dispatchEvent(new Event("visibilitychange")); });
+  await page.clock.setFixedTime(new Date(NU.getTime() + 25 * 60000));
+  await page.evaluate(() => { Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" }); document.dispatchEvent(new Event("visibilitychange")); });
+  await w(200);
+  await page.reload(); await w(400);
+  check("vergrendeld na 15 minuten zonder gebruik (ook na herladen)", await page.locator("#slotBalk").isVisible());
   check("geen startscherm bij vergrendeld", !(await page.locator("#welkom").isVisible()));
   check("vergrendeld: geen opdrachten", (await page.locator(".chip.eigen").count()) === 0);
   await page.fill("#snelInvoer", "test morgen"); await w(80);

@@ -138,8 +138,23 @@
   let sessie = laad(SESSIE, null);
   if (!sessie || typeof sessie.token !== "string" || typeof sessie.naam !== "string") sessie = null;
   if (!window.CLOUD || !CLOUD.aan) sessie = null;
-  let ontgrendeld = !!sessie && !sessie.faceid;
+  // Face ID: pas na een tijd zonder gebruik opnieuw ontgrendelen (standaard 15 minuten, instelbaar per apparaat)
+  const VERGRENDEL_KEUZES = [[0, "altijd bij openen"], [5, "na 5 minuten"], [15, "na 15 minuten"], [60, "na 1 uur"], [240, "na 4 uur"]];
+  const vergrendelNa = () => { const n = voorkeur.vergrendelNa; return VERGRENDEL_KEUZES.some(([m]) => m === n) ? n : 15; };
+  const laatstActief = () => { const t = laad(SESSIE, null); return t && typeof t.laatstActief === "number" ? t.laatstActief : 0; };
+  const nogVers = () => !!sessie && !!sessie.faceid && vergrendelNa() > 0 && Date.now() - laatstActief() < vergrendelNa() * 60000;
+  let ontgrendeld = !!sessie && (!sessie.faceid || nogVers());
   const actief = () => !!sessie && ontgrendeld;
+  function noteerActief() { if (sessie && ontgrendeld) { sessie.laatstActief = Date.now(); bewaar(SESSIE, sessie); } }
+  function vergrendelAlsNodig() {
+    if (!sessie || !sessie.faceid || !ontgrendeld) return;
+    if (vergrendelNa() === 0 || Date.now() - laatstActief() >= vergrendelNa() * 60000) {
+      ontgrendeld = false;
+      if (venster.open) sluitVenster();
+      if (inst.open) sluitInstellingen();
+      laadEigen(); tekenAlles();
+    }
+  }
 
   let opdrachten = [];
   function laadEigen() {
@@ -1532,6 +1547,7 @@
       bewaarVoorkeur(); bewaarInstellingen(); tekenAlles();
     }
     if (t.id === "inst-pabo") { instellingen.pabo = t.checked; bewaarInstellingen(); tekenAlles(); }
+    if (t.id === "vergrendel-na") { voorkeur.vergrendelNa = +t.value; bewaarVoorkeur(); noteerActief(); }
     if (t.id === "mp-gaten" || t.id === "mp-dagstart" || t.id === "mp-avond") { instellingen.meeplannen[t.id.slice(3)] = t.checked; bewaarInstellingen(); tekenHoofd(); }
     if (t.id === "push-ochtend" || t.id === "push-afspraak") {
       instellingen.meldingen[t.id === "push-ochtend" ? "ochtend" : "afspraak"] = t.checked;
@@ -1736,7 +1752,7 @@
 
   async function naInloggen(r) {
     const faceid = (sessie && sessie.naam === r.naam && sessie.faceid) || (vorigeNaam === r.naam ? vorigeFaceid : null) || null;
-    sessie = { naam: r.naam, token: r.token, faceid };
+    sessie = { naam: r.naam, token: r.token, faceid, laatstActief: Date.now() };
     bewaar(SESSIE, sessie);
     ontgrendeld = true;
     toonPinFormulier = false;
@@ -1812,6 +1828,7 @@
       const gelukt = await BIO.controleer(sessie.faceid);
       if (!gelukt) throw new Error("niet geverifieerd");
       ontgrendeld = true;
+      noteerActief();
       accountMelding = ""; accountFout = false;
       laadEigen();
       tekenAlles();
@@ -1828,6 +1845,7 @@
     if (!actief()) return;
     try {
       sessie.faceid = await BIO.aanzetten(sessie.naam);
+      sessie.laatstActief = Date.now();
       bewaar(SESSIE, sessie);
       accountMelding = hoofd(BIO.naam) + " staat aan. Als je Digigenda op dit apparaat opent, ontgrendel je met " + BIO.naam + ".";
       accountFout = false;
@@ -1946,7 +1964,9 @@
           : '<button type="button" class="zacht" data-actie="bio-aan">' + esc(hoofd(BIO.naam)) + " aanzetten</button>") : "") +
         '<button type="button" class="zacht" data-actie="pin-wijzig">Pincode wijzigen</button>' +
         '<button type="button" class="zacht" data-actie="uitloggen">Uitloggen</button></div>' +
-        '<div class="knoppen"><button type="button" class="tekstknop" data-actie="overal">Uitloggen op alle apparaten</button></div>';
+        '<div class="knoppen"><button type="button" class="tekstknop" data-actie="overal">Uitloggen op alle apparaten</button></div>' +
+        (bioMogelijk && sessie.faceid ? '<label class="vink-label vergrendel-keuze" for="vergrendel-na"><span>Opnieuw ontgrendelen</span><select id="vergrendel-na">' +
+          VERGRENDEL_KEUZES.map(([m, t]) => '<option value="' + m + '"' + (m === vergrendelNa() ? " selected" : "") + ">" + t + "</option>").join("") + "</select></label>" : "");
       return;
     }
     if (sessie && !toonPinFormulier) {
@@ -2005,7 +2025,12 @@
     else if (actie === "pin-annuleer") { pinFormulier = false; accountMelding = ""; tekenAccount(); }
   });
 
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { vernieuw(); tekenOpenBalk(); werkNuBij(); } });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") { vergrendelAlsNodig(); vernieuw(); tekenOpenBalk(); werkNuBij(); }
+    else noteerActief();
+  });
+  window.addEventListener("pagehide", noteerActief);
+  setInterval(() => { if (document.visibilityState === "visible") noteerActief(); }, 60000);
   window.addEventListener("online", () => vernieuw());
 
   // ---------- back-up ----------
@@ -2325,12 +2350,39 @@
   });
 
   // Gedeeld naar de app (Android share-target) of geopend met ?tekst=…: agenda-tekst → import, anders → snelle invoer
+  // Een melding (of een link) wijst naar één item: toon die dag en open het item
+  function openItem(id, datum) {
+    const o = opdrachten.find((x) => x.id === id);
+    const d = o ? o.datum : (/^\d{4}-\d{2}-\d{2}$/.test(datum || "") ? datum : vandaag());
+    zetDag(d); weekendTonen = false;
+    const dt = ontleed(d); maand = { j: dt.getFullYear(), m: dt.getMonth() };
+    zetWeergave("dag");
+    if (o && !(sessie && !ontgrendeld)) openVenster(o.id);
+    else if (!o) toast("Deze afspraak staat niet (meer) in je agenda.");
+  }
   function verwerkStartParameters() {
     let q;
     try { q = new URLSearchParams(location.search); } catch (e) { return; }
     const tekst = (q.get("tekst") || q.get("text") || "").trim(), url = (q.get("url") || "").trim(), titel = (q.get("titel") || q.get("title") || "").trim();
-    if (!tekst && !url && !titel) return;
+    const item = (q.get("item") || "").trim();
+    if (!tekst && !url && !titel && !item && !q.get("nieuw") && !q.get("gedeeld") && !q.get("scherm")) return;
     try { history.replaceState(null, "", location.pathname); } catch (e) { /* niets */ }
+    if (item) return openItem(item, q.get("datum"));
+    if (q.get("scherm") === "vandaag") { gekozen = vandaag(); return zetWeergave("dag"); }
+    if (q.get("nieuw")) { if (telefoon()) window.scrollTo(0, 0); snel.focus(); return; }
+    if (q.get("gedeeld")) {
+      // Gedeeld via de share-target (Android): de service worker heeft het bestand of de tekst klaargezet
+      if (!("caches" in window)) return;
+      caches.open("digigenda-gedeeld").then((c) => c.match("./gedeeld")).then((r) => r ? r.text() : "").then((t) => {
+        caches.open("digigenda-gedeeld").then((c) => c.delete("./gedeeld")).catch(() => {});
+        if (!t) return;
+        if (/BEGIN:VCALENDAR/i.test(t)) return openImportVenster("tekst", { tekst: t });
+        const link = /^(webcal|https):\/\/\S+/i.exec(t.trim());
+        if (link && /\.(ics|ical)(\?|$)|webcal:/i.test(link[0])) return openImportVenster("keuze", { url: link[0] });
+        snel.value = t.slice(0, 4000); groeiVeld(); tekenVoorbeeld(); snel.focus();
+      }).catch(() => {});
+      return;
+    }
     if (/BEGIN:VCALENDAR/i.test(tekst)) return openImportVenster("tekst", { tekst });
     const link = [url, tekst, titel].find((x) => /^(webcal|https):\/\/\S+/i.test(x));
     if (link && /\.(ics|ical)(\?|$)|webcal:|calendar|agenda|rooster|ical/i.test(link)) return openImportVenster("keuze", { url: link.match(/^(webcal|https):\/\/\S+/i)[0] });
@@ -2401,6 +2453,7 @@
     // Tik op een melding terwijl de app al open is: naar vandaag
     navigator.serviceWorker.addEventListener("message", (e) => {
       if (e.data && e.data.type === "naar-vandaag") { gekozen = vandaag(); weekendTonen = false; zetWeergave("dag"); }
+      if (e.data && e.data.type === "open-item") openItem(e.data.id, e.data.datum);
     });
   }
   // Schermbreedte verandert (draaien, venster smaller): week en maand opnieuw tekenen

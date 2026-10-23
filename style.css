@@ -743,3 +743,7 @@ dialog.alleen-lezen input:disabled, dialog.alleen-lezen select:disabled, dialog.
 .studie-lijst .rij { padding: 6px 0; grid-template-columns: minmax(0, 1fr); }
 .rij.vast.met-studie .studie-knop { flex-basis: 100%; padding: 2px 0 0; font-size: 13px; }
 @media (max-width: 640px) { .studie-inhoud .imp-form { flex-wrap: wrap; } }
+
+/* Face ID: keuze wanneer opnieuw ontgrendelen */
+.vergrendel-keuze { margin-top: 6px; gap: 10px; }
+.vergrendel-keuze select { border: 1px solid var(--lijn); border-radius: 8px; padding: 6px 8px; background: var(--bg); font-size: 14px; }

@@ -118,6 +118,7 @@
         <input id="f-eind" name="eind" type="time">
       </div>
     </div>
+    <p class="klein f-import" id="f-import-uitleg" hidden></p>
     <p class="klein f-uitleg" id="f-uitleg">Zonder begintijd is het een to-do die je kunt afvinken. Met begintijd wordt het een blok in je agenda.</p>
     <div class="twee">
       <div id="f-agenda-rij">
@@ -170,6 +171,7 @@
     <section class="inst-blok" id="inst-account"></section>
     <section class="inst-blok" id="inst-meldingen"></section>
     <section class="inst-blok" id="inst-agendas"></section>
+    <section class="inst-blok" id="inst-import"></section>
     <section class="inst-blok" id="inst-koppeling"></section>
     <section class="inst-blok" id="inst-beginscherm"></section>
     <section class="inst-blok" id="inst-backup">
@@ -186,6 +188,15 @@
       <button type="button" class="tekstknop" id="welkomOpnieuw">Startscherm opnieuw tonen</button>
     </section>
   </div>
+</dialog>
+
+<!-- Agenda binnenhalen (link, bestand of tekst) -->
+<dialog id="importVenster" class="groot-venster" aria-labelledby="imp-titel">
+  <div class="venster-kop">
+    <h3 id="imp-titel">Agenda binnenhalen</h3>
+    <button type="button" class="pijl" id="imp-sluit" aria-label="Sluiten">×</button>
+  </div>
+  <div class="venster-inhoud" id="imp-inhoud"></div>
 </dialog>
 
 <!-- Startscherm (eerste keer) -->
@@ -216,6 +227,7 @@
 
 <script src="toetsen.js?v=20261023a"></script>
 <script src="parse.js?v=20261023a"></script>
+<script src="ics.js?v=20261023a"></script>
 <script src="cloud.js?v=20261023a"></script>
 <script src="app.js?v=20261023a"></script>
 </body>

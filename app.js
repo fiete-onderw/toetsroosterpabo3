@@ -54,8 +54,9 @@
   const nuMinuten = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
   const duurTekst = (m) => m < 60 ? m + " min" : Math.floor(m / 60) + " u" + (m % 60 ? " " + (m % 60) + " min" : "");
   // Zonder begintijd = to-do (afvinkbaar). Met begintijd = blok in de agenda.
-  const isTodo = (o) => !o.tijd;
-  const tijdTekst = (o) => o.tijd ? o.tijd + (o.eind ? "–" + o.eind : "") : (o.eind ? "tot " + o.eind : "");
+  const isTodo = (o) => !o.tijd && !o.bron;
+  const isHeleDag = (o) => !o.tijd && !!o.bron;
+  const tijdTekst = (o) => o.tijd ? o.tijd + (o.eind ? "–" + o.eind : "") : (o.eind ? "tot " + o.eind : (o.bron ? "hele dag" : ""));
   // Eindigt een afspraak de volgende dag (bijv. een nachtdienst 22:00–06:00)?
   const overMiddernacht = (o) => !!(o.tijd && o.eind && o.eind < o.tijd);
   const eindMinuten = (o) => { const s = minuten(o.tijd); let e = o.eind ? minuten(o.eind) : s + 60; if (e <= s) e += 24 * 60; return e; };
@@ -94,7 +95,8 @@
       soort: SOORTEN.includes(o.soort) ? o.soort : "opdracht",
       agenda: AGENDAS.includes(o.agenda) ? o.agenda : "school",
       notitie: String(o.notitie || "").slice(0, 400),
-      klaar: !!o.klaar
+      klaar: !!o.klaar,
+      bron: /^[a-z0-9-]{4,40}$/.test(o.bron || "") ? o.bron : null
     };
   }
   const normaleLijst = (l) => (Array.isArray(l) ? l : []).map(normaal).filter(Boolean);
@@ -268,11 +270,12 @@
     if (o.soort !== "opdracht" && o.soort !== "afspraak") meta.push(SOORT_LABEL[o.soort]);
     if (!blok && o.eind) meta.push("tot " + o.eind);
     if (blok && overMiddernacht(o)) meta.push("tot de volgende ochtend");
+    if (o.bron) meta.push("via " + importNaam(o.bron));
     const links = blok
-      ? '<span class="tijdstip" aria-label="' + esc(tijdTekst(o)) + '">' + o.tijd + (o.eind ? "<small>" + o.eind + "</small>" : "") + "</span>"
+      ? '<span class="tijdstip' + (o.tijd ? "" : " heledag") + '" aria-label="' + esc(tijdTekst(o)) + '">' + (o.tijd ? o.tijd + (o.eind ? "<small>" + o.eind + "</small>" : "") : "dag") + "</span>"
       : '<button type="button" class="vink" data-klaar="' + esc(o.id) + '" aria-pressed="' + klaar + '" aria-label="' + (klaar ? "Weer openzetten: " : "Afvinken: ") + esc(o.titel) + '">' + vinkSvg + "</button>";
     const veeg = !blok && !o.klaar;
-    return '<li class="rij' + (klaar ? " klaar" : "") + (blok ? " blokrij" : "") + (veeg ? " veegbaar" : "") + '" style="--c:' + agendaKleur(o.agenda) + '" data-id="' + esc(o.id) + '"' +
+    return '<li class="rij' + (klaar ? " klaar" : "") + (blok ? " blokrij" : "") + (veeg ? " veegbaar" : "") + (o.bron ? " import" : "") + '" style="--c:' + agendaKleur(o.agenda) + '" data-id="' + esc(o.id) + '"' +
       (veeg ? ' data-veeg="' + esc(schuifLabel(o)) + '"' : "") + ">" + links +
       '<div class="rij-tekst" data-bewerk="' + esc(o.id) + '" role="button" tabindex="0" aria-label="Wijzigen: ' + esc(o.titel) + '">' +
       '<span class="rij-titel">' + esc(o.titel) + "</span>" +
@@ -405,7 +408,7 @@
     const hoog = (Math.min(x.ev, e * 60) - s0) / 60;
     const kort = Math.min(x.ev, e * 60) - s0 < 50;
     const extra = o.soort !== "opdracht" && o.soort !== "afspraak" ? SOORT_LABEL[o.soort] : "";
-    return '<button type="button" class="blok' + blokStatus(x, datum) + (kort ? " kort" : "") + (extra ? " nadruk" : "") + (x.n > 1 ? " deel" : "") + (x.vervolg ? " vervolg" : "") + '" data-bewerk="' + esc(o.id) + '" data-s="' + x.s + '" data-e="' + x.e + '"' +
+    return '<button type="button" class="blok' + blokStatus(x, datum) + (kort ? " kort" : "") + (extra ? " nadruk" : "") + (x.n > 1 ? " deel" : "") + (x.vervolg ? " vervolg" : "") + (o.bron ? " import" : "") + '" data-bewerk="' + esc(o.id) + '" data-s="' + x.s + '" data-e="' + x.e + '"' +
       ' aria-label="' + esc((x.vervolg ? "Sinds gisteren " + o.tijd + ", tot " + o.eind : tijdTekst(o)) + " " + o.titel) + '"' +
       ' style="--c:' + agendaKleur(o.agenda) + ";top:calc(var(--uurh) * " + ((s0 - b * 60) / 60).toFixed(4) + ");height:calc(var(--uurh) * " + hoog.toFixed(4) + " - 2px);" +
       "left:calc(" + (x.kol / x.n * 100).toFixed(3) + "% + 2px);width:calc(" + (100 / x.n).toFixed(3) + '% - 4px)">' +
@@ -522,6 +525,7 @@
     const vast = vastOp(s);
     const eigen = eigenOp(s);
     const eerder = isVandaag ? nogOpen() : [];
+    const heleDag = eigen.filter(isHeleDag);
     const todos = eigen.filter(isTodo);
     const open = todos.filter((o) => !o.klaar);
     const klaarLijst = todos.filter((o) => o.klaar);
@@ -542,12 +546,12 @@
 
     // To-do's: eerst wat nog openstaat van eerder, dan vandaag, afgevinkt onderaan
     html += '<section class="dag-todo"><h3 class="sectie-label">To-do</h3>';
-    if (vast.length || eerder.length || todos.length) {
+    if (vast.length || eerder.length || todos.length || heleDag.length) {
       // Meer dan 12 open to-do's: de rest achter één knop, zodat de agenda eronder bereikbaar blijft
       let rijen = eerder.map((o) => rij(o, false, { van: true })).concat(open.map((o) => rij(o, false)));
       let meer = "";
       if (!todoAlles && rijen.length > TODO_MAX + 2) { meer = '<button type="button" class="toon-meer" data-todo-alles="1">Nog ' + (rijen.length - TODO_MAX) + ' to-do’s tonen</button>'; rijen = rijen.slice(0, TODO_MAX); }
-      html += '<ul class="rijen">' + vast.map(vastRij).join("") + rijen.join("") +
+      html += '<ul class="rijen">' + vast.map(vastRij).join("") + heleDag.map((o) => rij(o, false)).join("") + rijen.join("") +
         (meer ? "" : klaarLijst.map((o) => rij(o, false)).join("")) + "</ul>" + meer;
     } else {
       html += '<p class="leeg">Niets te doen. Typ ' + waarTypen() + ' bijvoorbeeld <em>“' + esc(isVandaag ? "vandaag" : DAGEN_LANG[ontleed(s).getDay()]) + ' samenvatting schrijven”</em>.</p>';
@@ -594,7 +598,7 @@
       kop += '<button type="button" class="wk-dag' + (d === v ? " vandaag" : "") + (idx[i] >= 5 ? " weekend" : "") + (vak ? " vakantie" : "") + '" data-naar-dag="' + d + '" aria-label="' + langDatum(d) + ' openen">' +
         '<span class="wd">' + DAGEN[idx[i]] + '</span><span class="nr">' + dag.getDate() + "</span></button>";
       const vast = vastOp(d);
-      const todos = eigenOp(d).filter(isTodo);
+      const todos = eigenOp(d).filter((o) => isTodo(o) || isHeleDag(o));
       heledag += '<div class="hd-cel' + (vak ? " vakantie" : "") + '">' +
         (vak && (i === 0 || d === vak.start) ? '<span class="vaklabel">' + esc(vak.naam) + "</span>" : "") +
         vast.map((x) => '<span class="hd-chip vast" style="--c:' + vastKleur(x.soort) + '" title="' + esc(x.titel) + '">' + slot() + "<span>" + esc(x.titel) + "</span></span>").join("") +
@@ -864,7 +868,10 @@
   snel.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); snelToevoegen(); }
   });
-  snel.addEventListener("input", () => { groeiVeld(); tekenVoorbeeld(); });
+  snel.addEventListener("input", () => {
+    if (/BEGIN:VCALENDAR/i.test(snel.value) && snel.value.length > 60) { const t = snel.value; snel.value = ""; groeiVeld(); tekenVoorbeeld(); return openImportVenster("tekst", { tekst: t }); }
+    groeiVeld(); tekenVoorbeeld();
+  });
   // Telefoon: tijdens het typen verdwijnt de onderbalk en schuift de typbalk mee met het toetsenbord
   snel.addEventListener("focus", () => document.body.classList.add("typt"));
   snel.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== snel && !$("snelForm").contains(document.activeElement)) document.body.classList.remove("typt"); }, 150));
@@ -902,8 +909,22 @@
     $("f-fout").textContent = "";
     $("f-verwijder").hidden = !o;
     $("f-verwijder").textContent = "Verwijderen";
+    // Geïmporteerd uit een agenda: alleen lezen (bij verversen zou een wijziging toch overschreven worden)
+    const geimporteerd = !!(o && o.bron);
+    venster.classList.toggle("alleen-lezen", geimporteerd);
+    venster.querySelectorAll("input, select, textarea").forEach((el) => { el.disabled = geimporteerd; });
+    $("f-import-uitleg").hidden = !geimporteerd;
+    $("f-uitleg").hidden = geimporteerd;
+    if (geimporteerd) {
+      const imp = importVan(o.bron);
+      $("f-import-uitleg").innerHTML = "Uit <strong>" + esc(imp ? imp.naam : "een geïmporteerde agenda") + "</strong>. Wijzig dit in de bron; Digigenda neemt het over bij het verversen. " +
+        '<button type="button" class="tekstknop" data-import-beheer="' + esc(o.bron) + '">Import beheren</button>';
+      $("venstertitel").textContent = o.tijd ? "Afspraak (geïmporteerd)" : "Hele dag (geïmporteerd)";
+    }
+    $("f-verwijder").hidden = !o || geimporteerd;
+    venster.querySelector('button[type="submit"]').hidden = geimporteerd;
     if (typeof venster.showModal === "function") venster.showModal(); else venster.setAttribute("open", "");
-    $("f-titel").focus();
+    if (!geimporteerd) $("f-titel").focus(); else $("f-annuleer").focus();
   }
   // Begintijd verschuift: eindtijd schuift mee (zelfde duur). Afvinken kan alleen bij to-do's.
   let vorigeBegin = "";
@@ -951,6 +972,7 @@
     opslaan([id]);
   });
   $("f-annuleer").addEventListener("click", sluitVenster);
+  venster.addEventListener("click", (e) => { const k = e.target.closest("[data-import-beheer]"); if (k) { sluitVenster(); openImportVenster("lijst"); } });
   $("f-verwijder").addEventListener("click", () => {
     if (verwijderStap === 0) { verwijderStap = 1; $("f-verwijder").textContent = "Zeker weten? Klik nogmaals"; return; }
     const id = bewerkId;
@@ -1187,6 +1209,7 @@
       '<div class="agenda-keuze">' + agendaKeuzeHtml("inst-ag", instellingen.agendas) + "</div>" +
       paboKeuzeHtml("inst", instellingen.pabo, instellingen.doelgroep, agendaAan("school"));
 
+    tekenImportBlok();
     // Koppelen aan iPhone-agenda
     let k = "<h4>Koppelen aan je iPhone-agenda</h4>";
     if (!actief()) {
@@ -1540,6 +1563,14 @@
       bewaar(CACHE + sessie.naam, opdrachten);
       neemServerInstellingen(r.instellingen);
       syncStatus = "ok";
+      // Rijen die de server als 'ongeldig' heeft gemarkeerd (ververste of verwijderde import) echt weghalen
+      if (Array.isArray(r.opruimen) && r.opruimen.length) {
+        const w = wachtrij(sessie.naam);
+        r.opruimen.forEach((id) => { if (typeof id === "string" && !w.verwijder.includes(id)) w.verwijder.push(id); });
+        bewaar(WACHT + sessie.naam, w);
+        synchroniseer();
+      }
+      laadImports();
       stil(tekenAlles);
     } catch (fout) {
       if (fout.verlopen) return sessieVerlopen();
@@ -1582,6 +1613,7 @@
     opdrachten = lijst;
     bewaar(CACHE + r.naam, opdrachten);
     neemServerInstellingen(r.instellingen);
+    laadImports();
     accountFout = false;
     accountMelding = meegenomen
       ? meegenomen + " opdracht" + (meegenomen === 1 ? " van dit apparaat is" : "en van dit apparaat zijn") + " aan je account toegevoegd."
@@ -1677,6 +1709,7 @@
     weg(PUSH_VLAG); pushAan = false; pushMelding = "";
     weg(SESSIE); weg(CACHE + naam); weg(WACHT + naam);
     sessie = null; ontgrendeld = false; uitlogStap = 0; overalStap = 0; pinFormulier = false; agendaLink = null; linkMelding = "";
+    imports = [];
     syncStatus = ""; formModus = "inloggen";
     accountMelding = melding;
     accountFout = false;
@@ -1861,11 +1894,302 @@
     lezer.readAsText(bestand);
   });
 
+
+  // ---------- agenda's binnenhalen (import via link, bestand of tekst) ----------
+  const IMPORTS_LOKAAL = "digigenda-imports-v1";     // zonder account: imports alleen in deze browser (bestand/tekst)
+  let imports = [];
+  const importVan = (id) => imports.find((i) => i.id === id) || null;
+  const importNaam = (id) => { const i = importVan(id); return i ? i.naam : "geïmporteerde agenda"; };
+  const nieuwImportId = () => "imp-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const importsLokaal = () => (laad(IMPORTS_LOKAAL, []) || []).filter((i) => i && typeof i.id === "string");
+  function laadImports() {
+    if (actief()) {
+      imports = (laad(CACHE + "imports:" + sessie.naam, []) || []);
+      CLOUD.importsLijst(sessie.token).then((r) => {
+        if (r && r.ok && Array.isArray(r.imports)) { imports = r.imports; bewaar(CACHE + "imports:" + sessie.naam, imports); if (inst.open) tekenImportBlok(); if (impVenster.open && impStap === "lijst") tekenImportVenster(); tekenHoofd(); }
+      }).catch(() => {});
+    } else if (!sessie) imports = importsLokaal();
+    else imports = [];
+  }
+  function bewaarImportsLokaal() { if (!sessie) bewaar(IMPORTS_LOKAAL, imports); else bewaar(CACHE + "imports:" + sessie.naam, imports); }
+  const wanneer = (iso) => {
+    if (!iso) return "nog niet ververst";
+    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    return min < 1 ? "zojuist ververst" : min < 60 ? min + " min geleden ververst" : min < 48 * 60 ? Math.round(min / 60) + " uur geleden ververst" : "op " + dagKort(iso.slice(0, 10)) + " ververst";
+  };
+
+  function tekenImportBlok(doel) {
+    const el = doel || $("inst-import");
+    if (!el) return;
+    let h = "<h4>Agenda’s binnenhalen</h4>";
+    if (!imports.length) {
+      h += '<p class="klein">Haal je werkrooster, schoolrooster of een andere agenda binnen. Via een link blijft hij vanzelf bijgewerkt; een bestand of geplakte tekst haal je één keer binnen.</p>';
+    } else {
+      h += '<ul class="import-lijst">' + imports.map((i) => {
+        const items = opdrachten.filter((o) => o.bron === i.id).length;
+        const status = i.soort === "link" ? (i.laatsteFout ? '<span class="te-laat">' + esc(i.laatsteFout) + "</span>" : esc(wanneer(i.laatstVerverst))) : "bestand, eenmalig";
+        return '<li class="import-rij" style="--c:' + agendaKleur(i.agenda) + '"><i class="ak-stip"></i><div class="import-tekst"><strong>' + esc(i.naam) + "</strong>" +
+          '<span class="klein">' + esc(AGENDA_NAAM[i.agenda] || "Werk") + (i.alleenBezet ? " · alleen als bezet" : "") + " · " + items + (items === 1 ? " item" : " items") + " · " + status + "</span></div>" +
+          '<div class="knoppen">' + (i.soort === "link" && actief() ? '<button type="button" class="mini" data-import-ververs="' + esc(i.id) + '">Verversen</button>' : "") +
+          '<button type="button" class="mini" data-import-weg="' + esc(i.id) + '">Verwijderen</button></div></li>';
+      }).join("") + "</ul>";
+    }
+    h += '<div class="knoppen"><button type="button" class="hoofd" data-import-nieuw>Agenda toevoegen</button></div>';
+    if (importMelding) h += '<p class="klein' + (importFout ? " te-laat" : "") + '" role="status">' + esc(importMelding) + "</p>";
+    el.innerHTML = h;
+    if (!doel && impVenster.open && impStap === "lijst" && $("imp-lijst-blok")) $("imp-lijst-blok").innerHTML = h;
+  }
+  let importMelding = "", importFout = false, importBezig = false, importWegStap = null;
+
+  async function importVerversen(id) {
+    if (!actief() || importBezig) return;
+    importBezig = true; importMelding = "Verversen…"; importFout = false; tekenImportBlok();
+    try {
+      const r = await CLOUD.importVerversen(sessie.token, id);
+      if (r && r.sessie === false) { importBezig = false; sluitInstellingen(); return sessieVerlopen(); }
+      if (!r || !r.ok) throw new Error((r && r.fout) || "Verversen is niet gelukt.");
+      importMelding = r.aantal + " afspraken bijgewerkt." + (r.meldingen && r.meldingen.length ? " " + r.meldingen[0] : "");
+      await vernieuw();
+    } catch (e) { importFout = true; importMelding = e.message || "Verversen is niet gelukt."; }
+    importBezig = false; tekenImportBlok();
+  }
+  async function importVerwijderen(id) {
+    const imp = importVan(id);
+    if (!imp) return;
+    if (importWegStap !== id) { importWegStap = id; importMelding = "Alle " + opdrachten.filter((o) => o.bron === id).length + " afspraken uit ‘" + imp.naam + "’ worden verwijderd. Klik nogmaals op Verwijderen om dat te bevestigen."; importFout = true; tekenImportBlok(); return; }
+    importWegStap = null;
+    const ids = opdrachten.filter((o) => o.bron === id).map((o) => o.id);
+    try {
+      if (actief()) {
+        const r = await CLOUD.importVerwijder(sessie.token, id);
+        if (r && r.sessie === false) { sluitInstellingen(); return sessieVerlopen(); }
+        if (!r || !r.ok) throw new Error((r && r.fout) || "Verwijderen is niet gelukt.");
+        (Array.isArray(r.opruimen) ? r.opruimen : []).forEach((x) => { if (typeof x === "string" && !ids.includes(x)) ids.push(x); });
+      }
+      imports = imports.filter((i) => i.id !== id);
+      bewaarImportsLokaal();
+      opdrachten = opdrachten.filter((o) => o.bron !== id);
+      opslaan([], ids);
+      importMelding = "‘" + imp.naam + "’ is verwijderd (" + ids.length + " afspraken)."; importFout = false;
+    } catch (e) { importMelding = e.message || "Verwijderen is niet gelukt."; importFout = true; }
+    tekenImportBlok();
+  }
+  inst.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-import-nieuw],[data-import-ververs],[data-import-weg]");
+    if (!t) return;
+    if (t.hasAttribute("data-import-nieuw")) { importMelding = ""; return openImportVenster("keuze"); }
+    if (t.dataset.importVervers) return importVerversen(t.dataset.importVervers);
+    if (t.dataset.importWeg) return importVerwijderen(t.dataset.importWeg);
+  });
+
+  // ---- het importvenster: keuze → voorbeeld → klaar ----
+  const impVenster = $("importVenster");
+  let impStap = "keuze", impData = null;   // impData: { soort, url?, tekst?, bestandsnaam?, uitkomst?, naam, agenda, alleenBezet, vervang? }
+  function openImportVenster(stap, data) {
+    if (sessie && !ontgrendeld) { toast("Ontgrendel eerst je account."); return; }
+    impData = Object.assign({ soort: "link", naam: "", agenda: agendaAan("werk") ? "werk" : instellingen.agendas[0], alleenBezet: false }, data || {});
+    impStap = stap || "keuze";
+    if (impStap === "tekst" && impData.tekst) { leesLokaal(impData.tekst, "tekst"); return; }
+    tekenImportVenster();
+    if (typeof impVenster.showModal === "function") { if (!impVenster.open) impVenster.showModal(); } else impVenster.setAttribute("open", "");
+  }
+  function sluitImportVenster() { if (typeof impVenster.close === "function") impVenster.close(); else impVenster.removeAttribute("open"); if (inst.open) tekenImportBlok(); }
+  $("imp-sluit").addEventListener("click", sluitImportVenster);
+
+  const HULP = [
+    { kop: "Outlook / Microsoft 365 (werk)", tekst: "Outlook op het web → Instellingen → Agenda → <em>Gedeelde agenda’s</em> → <em>Een agenda publiceren</em>. Kies de agenda en bijvoorbeeld <em>Kan alle details zien</em>, klik <em>Publiceren</em> en kopieer de <strong>ICS-link</strong>.",
+      niet: "Staat het kopje er niet, of alleen ‘Kan zien wanneer ik bezet ben’? Dan heeft de IT-beheerder publiceren uitgezet. Probeer dan <em>Bestand importeren</em>: in Outlook op Windows via <em>Bestand → Agenda opslaan</em> (kies een datumbereik en ‘Volledige details’). Microsoft levert via de link ongeveer een half jaar vooruit." },
+    { kop: "Google Agenda", tekst: "Op een computer: Instellingen → klik links op je agenda → <em>Agenda integreren</em> → kopieer het <strong>Geheime adres in iCal-indeling</strong>.",
+      niet: "Ontbreekt dat adres bij een werk- of schoolaccount? Dan heeft de beheerder het uitgezet. Gebruik dan Instellingen → <em>Importeren en exporteren</em> → <em>Exporteren</em> (een .zip; pak hem uit en kies het .ics-bestand hieronder)." },
+    { kop: "iPhone / iCloud", tekst: "Agenda-app → tik op de (i) naast de agenda → zet <em>Openbare agenda</em> aan → <em>Deel link</em> → kopieer. De link begint met webcal://.",
+      niet: "Alleen iCloud-agenda’s kunnen dit; een werkagenda die via Exchange op je iPhone staat niet. Iedereen met de link kan je agenda lezen: deel hem dus alleen hier." },
+    { kop: "Rooster-app van je werk (Shiftbase, Planday, Het Rooster, Bedrijfsrooster…)", tekst: "Zoek in de app of website naar <em>Agenda synchroniseren</em>, <em>iCal</em> of <em>Koppelingen</em> (vaak onder je profiel of bij het rooster) en kopieer de link.",
+      niet: "Is er geen link? Dan heeft je werkgever dat uitgezet, of zit het rooster in een salarispakket (Nmbrs, AFAS, Youforce) dat geen agendalink heeft. Vraag de roosterplanner om het rooster als bestand of mail; de tekst kun je ook in de snelle invoer plakken (‘ma 9:00-17:00 kassa’)." },
+    { kop: "HAN-rooster (MyX / Osiris)", tekst: "Kijk in MyX of bij het rooster in Osiris naar <em>Exporteren</em> of <em>Agenda</em>. Is er een .ics-export, kies die dan hieronder bij <em>Bestand importeren</em>.",
+      niet: "Een vaste abonnementslink voor studenten is bij de HAN niet gedocumenteerd. Een geëxporteerd bestand verwerkt roosterwijzigingen niet: importeer het opnieuw als het rooster verandert (dezelfde afspraken worden dan bijgewerkt, niet verdubbeld)." }
+  ];
+  function hulpHtml() {
+    return '<details class="imp-hulp"><summary>Waar vind ik de link? En wat als het niet werkt?</summary>' +
+      HULP.map((h) => "<h5>" + h.kop + "</h5><p>" + h.tekst + "</p><p class=\"klein\"><strong>Werkt dit niet?</strong> " + h.niet + "</p>").join("") +
+      "<h5>Waarom geen knop ‘Inloggen met Microsoft of Google’?</h5><p class=\"klein\">Dat vereist bij werk- en schoolaccounts meestal goedkeuring van de IT-beheerder (en bij Google een verificatie van de app). Dat werkt dus niet betrouwbaar zonder beheerder, en daarom zit het niet in Digigenda.</p></details>";
+  }
+  const privacyHtml = () => '<p class="klein imp-privacy">Werkgevers en scholen kunnen regels hebben over het delen van agenda’s buiten de organisatie. Twijfel je? Kies <em>alleen als bezet tonen</em>: dan bewaart Digigenda geen titels, plaatsen of notities, alleen de tijden.</p>';
+
+  function tekenImportVenster() {
+    const el = $("imp-inhoud");
+    const d = impData || {};
+    if (impStap === "lijst") {
+      $("imp-titel").textContent = "Binnengehaalde agenda’s";
+      el.innerHTML = '<section class="inst-blok" id="imp-lijst-blok"></section>';
+      tekenImportBlok($("imp-lijst-blok"));   // zelfde weergave als in de instellingen
+      return;
+    }
+    if (impStap === "keuze") {
+      $("imp-titel").textContent = "Agenda binnenhalen";
+      const linkKan = actief();
+      el.innerHTML = '<div class="imp-stappen">' +
+        '<section class="imp-route"><h4>1. Abonneren via een link</h4><p class="klein">De beste manier: Digigenda ververst de agenda elk uur vanzelf. Werkt met Outlook/Microsoft 365, Google Agenda, iCloud en de meeste rooster-apps.</p>' +
+        (linkKan ? '<form id="imp-link-form" class="imp-form" novalidate><label class="vh" for="imp-url">Link</label><input id="imp-url" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="webcal://… of https://…/agenda.ics" value="' + esc(d.url || "") + '"><button type="submit" class="hoofd">Ophalen</button></form>'
+          : '<p class="klein te-laat">Hiervoor is een account nodig: de link wordt op de server bewaard (versleuteld) en daar elk uur ververst. Log in via Instellingen → Account.</p>') +
+        hulpHtml() + "</section>" +
+        '<section class="imp-route"><h4>2. Bestand importeren (.ics)</h4><p class="klein">Werkt dit niet via een link? Exporteer een .ics-bestand uit Outlook, Google (uitgepakte .zip), iCloud of je rooster-app en kies het hier. Je moet dit herhalen als het rooster verandert.</p>' +
+        '<div class="knoppen"><label class="zacht knop-label" for="imp-bestand">Bestand kiezen</label><input type="file" id="imp-bestand" accept=".ics,text/calendar,.ical,.ifb" hidden></div></section>' +
+        '<section class="imp-route"><h4>3. Tekst plakken</h4><p class="klein">Een uitnodiging (.ics-bijlage) of agenda die je als tekst hebt gekopieerd. Je kunt zo’n tekst ook rechtstreeks in de snelle invoer plakken.</p>' +
+        '<form id="imp-tekst-form" class="imp-form kolom" novalidate><label class="vh" for="imp-tekst">Agendatekst</label><textarea id="imp-tekst" rows="4" placeholder="BEGIN:VCALENDAR…"></textarea><div class="knoppen eind"><span class="ruimte"></span><button type="submit" class="zacht">Lezen</button></div></form></section>' +
+        (d.fout ? '<p class="klein te-laat" role="alert">' + esc(d.fout) + "</p>" : "") + "</div>";
+      return;
+    }
+    if (impStap === "bezig") {
+      $("imp-titel").textContent = "Agenda binnenhalen";
+      el.innerHTML = '<p class="klein" role="status">' + esc(d.bezigTekst || "Even geduld…") + "</p>";
+      return;
+    }
+    if (impStap === "voorbeeld") {
+      $("imp-titel").textContent = "Klopt dit?";
+      const u = d.uitkomst;
+      const bestaand = imports.filter((i) => i.soort !== "link");
+      el.innerHTML = '<div class="imp-voorbeeld">' +
+        "<p><strong>" + u.aantal + "</strong> " + (u.aantal === 1 ? "afspraak" : "afspraken") + (u.eersteDatum ? " van " + dagKort(u.eersteDatum) + " tot " + dagKort(u.laatsteDatum) : "") +
+        (u.aantalAfspraken && u.aantalAfspraken !== u.aantal ? ' <span class="klein">(' + u.aantalAfspraken + " in het bestand; herhalingen uitgerold van 30 dagen terug tot 400 dagen vooruit)</span>" : "") + "</p>" +
+        (u.meldingen && u.meldingen.length ? '<ul class="klein imp-meldingen">' + u.meldingen.map((m) => "<li>" + esc(m) + "</li>").join("") + "</ul>" : "") +
+        (u.voorbeeld.length ? '<ul class="rijen imp-rijen">' + u.voorbeeld.map((v) => '<li class="rij blokrij"><span class="tijdstip' + (v.tijd ? "" : " heledag") + '">' + (v.tijd ? v.tijd + (v.eind ? "<small>" + v.eind + "</small>" : "") : "dag") + '</span><div class="rij-tekst"><span class="rij-titel">' + esc(d.alleenBezet ? "Bezet" : (v.titel || "(zonder titel)")) + '</span><span class="rij-meta">' + esc(dagKort(v.datum)) + "</span></div></li>").join("") +
+          (u.aantal > u.voorbeeld.length ? '<li class="klein">… en nog ' + (u.aantal - u.voorbeeld.length) + "</li>" : "") + "</ul>" : '<p class="leeg">Geen afspraken in de komende periode.</p>') +
+        '<form id="imp-vorm" class="imp-form kolom" novalidate>' +
+        '<label for="imp-naam">Naam</label><input id="imp-naam" type="text" maxlength="60" value="' + esc(d.naam || u.naam || (d.soort === "link" ? (d.host || "Agenda") : (d.bestandsnaam || "Geplakte agenda"))) + '">' +
+        '<label for="imp-agenda">Zet in agenda</label><select id="imp-agenda">' + instellingen.agendas.map((a) => '<option value="' + a + '"' + (a === d.agenda ? " selected" : "") + ">" + AGENDA_NAAM[a] + "</option>").join("") + "</select>" +
+        '<label class="vink-label"><input type="checkbox" id="imp-bezet"' + (d.alleenBezet ? " checked" : "") + '><span>Alleen als bezet tonen <span class="klein">(geen titels, plaatsen of notities bewaren)</span></span></label>' +
+        (d.soort !== "link" && bestaand.length ? '<label for="imp-vervang">Dit is een nieuwere versie van</label><select id="imp-vervang"><option value="">— nieuwe import —</option>' + bestaand.map((i) => '<option value="' + esc(i.id) + '"' + (d.vervang === i.id ? " selected" : "") + ">" + esc(i.naam) + "</option>").join("") + "</select>" : "") +
+        privacyHtml() +
+        '<div class="knoppen eind"><button type="button" class="zacht" data-imp-terug>Terug</button><span class="ruimte"></span><button type="submit" class="hoofd">' + (u.aantal ? "Toevoegen" : "Toch toevoegen") + "</button></div></form></div>";
+      return;
+    }
+    if (impStap === "klaar") {
+      $("imp-titel").textContent = "Gelukt";
+      el.innerHTML = '<div class="imp-klaar"><p><strong>' + esc(d.naam) + "</strong> is binnengehaald: " + d.aantal + (d.aantal === 1 ? " afspraak" : " afspraken") + " in je agenda <em>" + esc(AGENDA_NAAM[d.agenda]) + "</em>." +
+        (d.soort === "link" ? " Digigenda ververst de link elk uur." : " Verandert het rooster? Importeer het bestand dan opnieuw; dezelfde afspraken worden bijgewerkt.") + "</p>" +
+        (d.meldingen && d.meldingen.length ? '<ul class="klein imp-meldingen">' + d.meldingen.map((m) => "<li>" + esc(m) + "</li>").join("") + "</ul>" : "") +
+        '<div class="knoppen eind"><button type="button" class="zacht" data-imp-nog>Nog een agenda</button><span class="ruimte"></span><button type="button" class="hoofd" data-imp-klaar>Klaar</button></div></div>';
+    }
+  }
+
+  // Bestand of tekst lokaal lezen (in de browser, niets gaat naar de server)
+  function leesLokaal(tekst, soort, bestandsnaam) {
+    const u = ICS.lees(tekst, {});
+    if (!u.ok) { impData.fout = u.fout; impStap = "keuze"; tekenImportVenster(); if (!impVenster.open) openImportVenster("keuze", impData); return; }
+    impData = Object.assign(impData || {}, { soort, tekst, bestandsnaam: bestandsnaam ? bestandsnaam.replace(/\.(ics|ical|ifb)$/i, "") : "", fout: "",
+      uitkomst: { aantal: u.voorvallen.length, aantalAfspraken: u.aantalAfspraken, naam: u.naam, voorbeeld: u.voorvallen.slice(0, 12), meldingen: u.meldingen, eersteDatum: u.voorvallen[0] ? u.voorvallen[0].datum : null, laatsteDatum: u.voorvallen.length ? u.voorvallen[u.voorvallen.length - 1].datum : null }, voorvallen: u.voorvallen });
+    impStap = "voorbeeld"; tekenImportVenster();
+    if (!impVenster.open) { if (typeof impVenster.showModal === "function") impVenster.showModal(); else impVenster.setAttribute("open", ""); }
+  }
+  async function leesLink(url) {
+    impData = Object.assign(impData || {}, { soort: "link", url, bezigTekst: "Link ophalen…", fout: "" });
+    impStap = "bezig"; tekenImportVenster();
+    try {
+      const r = await CLOUD.importVoorbeeld(sessie.token, url);
+      if (r && r.sessie === false) { sluitImportVenster(); return sessieVerlopen(); }
+      if (!r || !r.ok) throw new Error((r && r.fout) || "Ophalen is niet gelukt.");
+      let host = ""; try { host = new URL(url.replace(/^webcal:/i, "https:")).hostname; } catch (e) { /* niets */ }
+      impData.host = host; impData.uitkomst = r;
+      impStap = "voorbeeld";
+    } catch (e) { impData.fout = e.message || "Ophalen is niet gelukt."; impStap = "keuze"; }
+    tekenImportVenster();
+  }
+  async function importToevoegen() {
+    const d = impData;
+    const naam = ($("imp-naam").value || "").trim().slice(0, 60) || "Agenda";
+    const agenda = $("imp-agenda").value;
+    const alleenBezet = $("imp-bezet").checked;
+    const vervang = $("imp-vervang") ? $("imp-vervang").value : "";
+    const id = vervang || nieuwImportId();
+    const def = { id, naam, soort: d.soort, agenda, alleenBezet, host: d.host || null, laatstVerverst: null, laatsteFout: null, aantal: 0, gemaakt: new Date().toISOString() };
+    if (d.soort === "link") def.url = d.url;
+    impStap = "bezig"; d.bezigTekst = "Toevoegen…"; tekenImportVenster();
+    try {
+      if (actief()) {
+        const r = await CLOUD.importBewaar(sessie.token, def);
+        if (r && r.sessie === false) { sluitImportVenster(); return sessieVerlopen(); }
+        if (!r || !r.ok) throw new Error((r && r.fout) || "Opslaan is niet gelukt.");
+      } else if (imports.length >= 10 && !vervang) throw new Error("Je kunt maximaal 10 agenda’s binnenhalen. Verwijder er eerst een.");
+      delete def.url;
+      imports = imports.filter((i) => i.id !== id).concat([def]);
+      bewaarImportsLokaal();
+      let aantal = 0, meldingen = d.uitkomst.meldingen || [];
+      if (d.soort === "link") {
+        const r = await CLOUD.importVerversen(sessie.token, id);
+        if (!r || !r.ok) throw new Error((r && r.fout) || "Ophalen is niet gelukt.");
+        aantal = r.aantal; meldingen = r.meldingen || meldingen;
+        await vernieuw();
+      } else {
+        const nieuw = d.voorvallen.slice(0, 1500).map((v) => normaal(ICS.naarOpdracht(v, id, agenda, alleenBezet))).filter(Boolean);
+        if (d.voorvallen.length > 1500) meldingen = meldingen.concat(["Meer dan 1500 afspraken: alleen de eerste 1500 zijn meegenomen."]);
+        const nieuweIds = new Set(nieuw.map((o) => o.id));
+        const weg = opdrachten.filter((o) => o.bron === id && !nieuweIds.has(o.id)).map((o) => o.id);
+        opdrachten = opdrachten.filter((o) => o.bron !== id).concat(nieuw);
+        if (opdrachten.length > 3000) throw new Error("Daarmee kom je boven de 3000 opdrachten. Verwijder eerst een oude import.");
+        aantal = nieuw.length;
+        if (!agendaAan(agenda)) { instellingen.agendas = AGENDAS.filter((a) => a === agenda || instellingen.agendas.includes(a)); bewaarInstellingen(); }
+        opslaan(nieuw.map((o) => o.id), weg);
+        def.aantal = aantal; def.laatstVerverst = new Date().toISOString();
+      }
+      impData = { naam, agenda, soort: d.soort, aantal, meldingen };
+      impStap = "klaar";
+    } catch (e) {
+      d.fout = e.message || "Toevoegen is niet gelukt."; impStap = "voorbeeld"; tekenImportVenster();
+      const f = document.createElement("p"); f.className = "klein te-laat"; f.setAttribute("role", "alert"); f.textContent = d.fout; $("imp-vorm").prepend(f);
+      return;
+    }
+    tekenImportVenster();
+    laadImports();
+  }
+  impVenster.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (e.target.id === "imp-link-form") { const u = ($("imp-url").value || "").trim(); if (!/^(webcal|https):\/\//i.test(u)) { impData.fout = "Plak een link die begint met webcal:// of https://."; return tekenImportVenster(); } return leesLink(u); }
+    if (e.target.id === "imp-tekst-form") { const t = $("imp-tekst").value || ""; if (!t.trim()) return; return leesLokaal(t, "tekst"); }
+    if (e.target.id === "imp-vorm") return importToevoegen();
+  });
+  impVenster.addEventListener("change", (e) => {
+    if (e.target.id === "imp-bestand") {
+      const bestand = e.target.files && e.target.files[0];
+      if (!bestand) return;
+      if (bestand.size > 5 * 1024 * 1024) { impData.fout = "Dit bestand is groter dan 5 MB."; e.target.value = ""; return tekenImportVenster(); }
+      const lezer = new FileReader();
+      lezer.onload = () => leesLokaal(String(lezer.result || ""), "bestand", bestand.name);
+      lezer.readAsText(bestand);
+      e.target.value = "";
+    }
+    if (e.target.id === "imp-bezet" && impData) { impData.alleenBezet = e.target.checked; impData.naam = $("imp-naam").value; impData.agenda = $("imp-agenda").value; tekenImportVenster(); }
+  });
+  impVenster.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-imp-terug],[data-imp-nog],[data-imp-klaar],[data-import-nieuw],[data-import-ververs],[data-import-weg]");
+    if (!t) return;
+    if (t.hasAttribute("data-imp-terug")) { impStap = "keuze"; impData.fout = ""; return tekenImportVenster(); }
+    if (t.hasAttribute("data-imp-nog") || t.hasAttribute("data-import-nieuw")) { impData = { soort: "link", naam: "", agenda: impData && impData.agenda || "werk", alleenBezet: false }; impStap = "keuze"; return tekenImportVenster(); }
+    if (t.hasAttribute("data-imp-klaar")) return sluitImportVenster();
+    if (t.dataset.importVervers) return importVerversen(t.dataset.importVervers).then(() => { if (impStap === "lijst") tekenImportVenster(); });
+    if (t.dataset.importWeg) return importVerwijderen(t.dataset.importWeg).then(() => { if (impStap === "lijst") tekenImportVenster(); });
+  });
+
+  // Gedeeld naar de app (Android share-target) of geopend met ?tekst=…: agenda-tekst → import, anders → snelle invoer
+  function verwerkStartParameters() {
+    let q;
+    try { q = new URLSearchParams(location.search); } catch (e) { return; }
+    const tekst = (q.get("tekst") || q.get("text") || "").trim(), url = (q.get("url") || "").trim(), titel = (q.get("titel") || q.get("title") || "").trim();
+    if (!tekst && !url && !titel) return;
+    try { history.replaceState(null, "", location.pathname); } catch (e) { /* niets */ }
+    if (/BEGIN:VCALENDAR/i.test(tekst)) return openImportVenster("tekst", { tekst });
+    const link = [url, tekst, titel].find((x) => /^(webcal|https):\/\/\S+/i.test(x));
+    if (link && /\.(ics|ical)(\?|$)|webcal:|calendar|agenda|rooster|ical/i.test(link)) return openImportVenster("keuze", { url: link.match(/^(webcal|https):\/\/\S+/i)[0] });
+    snel.value = [titel, tekst].filter(Boolean).join(" ").slice(0, 4000);
+    groeiVeld(); tekenVoorbeeld(); snel.focus();
+  }
+
   // ---------- start ----------
   if (telefoon()) snel.placeholder = "Typ iets… ‘morgen 14:00 tandarts’";
   if (!opslagWerkt) toast("Let op: deze browser staat opslaan niet toe (bijvoorbeeld een privévenster).");
+  laadImports();
   tekenAlles();
   if (!instellingen.welkom && !sessie) toonWelkom();
+  verwerkStartParameters();
   if (window.BIO) BIO.beschikbaar().then((ja) => { bioMogelijk = ja; if (accountPlek) tekenAccount(); });
   vernieuw();
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {

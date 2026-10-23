@@ -680,3 +680,41 @@ dialog.actieblad::backdrop { background: rgba(20, 22, 30, 0.35); }
   #snelAgenda { max-width: 96px; border-left-width: 3px; }
   .rij .rij-acties { display: none; }
 }
+
+/* ================= Agenda's binnenhalen (import) ================= */
+.import-lijst { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; }
+.import-rij { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--lijn) 70%, transparent); }
+.import-rij:first-child { border-top: 0; }
+.import-rij .ak-stip { width: 12px; height: 12px; border-radius: 50%; background: var(--c); }
+.import-tekst { display: flex; flex-direction: column; min-width: 0; }
+.import-tekst strong { overflow-wrap: anywhere; }
+.import-tekst .klein { overflow-wrap: anywhere; }
+.import-rij .knoppen { gap: 4px; }
+@media (max-width: 480px) { .import-rij { grid-template-columns: auto minmax(0, 1fr); } .import-rij .knoppen { grid-column: 2; } }
+.imp-stappen { display: flex; flex-direction: column; }
+.imp-route { padding: 14px 0; border-top: 1px solid var(--lijn); display: flex; flex-direction: column; gap: 6px; }
+.imp-route:first-child { border-top: 0; }
+.imp-route h4, .imp-voorbeeld h4 { font-family: var(--display); font-size: 1.05rem; font-weight: 600; margin: 0; }
+.imp-form { display: flex; gap: 8px; align-items: stretch; }
+.imp-form.kolom { flex-direction: column; gap: 4px; }
+.imp-form input[type="url"], .imp-form input[type="text"], .imp-form select, .imp-form textarea { flex: 1; min-width: 0; width: 100%; border: 1px solid var(--lijn); border-radius: 8px; padding: 9px 10px; background: var(--bg); font-size: 16px; }
+.imp-form label { font-size: 13px; font-weight: 700; margin-top: 6px; }
+.imp-form .vink-label { margin-top: 8px; }
+.imp-hulp { margin-top: 4px; }
+.imp-hulp summary { cursor: pointer; color: var(--accent); font-weight: 700; font-size: 13.5px; }
+.imp-hulp h5 { font-family: var(--display); font-size: 0.98rem; font-weight: 600; margin: 12px 0 2px; }
+.imp-hulp p { margin: 2px 0 0; font-size: 13.5px; }
+.imp-voorbeeld { padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.imp-voorbeeld > p { margin: 0; }
+.imp-rijen { border: 1px solid var(--lijn); border-radius: 12px; padding: 4px 12px; max-height: 40vh; overflow: auto; }
+.imp-rijen .rij { padding: 7px 0; }
+.imp-rijen .klein { padding: 6px 0 4px; }
+.imp-meldingen { margin: 0; padding-left: 18px; color: var(--herkansing); }
+.imp-privacy { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--herkansing) 10%, var(--kaart)); color: var(--fg); }
+.imp-klaar { padding-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.imp-klaar p { margin: 0; }
+.tijdstip.heledag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.rij.import .rij-titel::before { content: "⇅ "; color: var(--muted); font-weight: 400; }
+.blok.import .blok-tijd::before { content: "⇅ "; }
+.f-import { margin: 0 0 4px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 9%, var(--kaart)); color: var(--fg); }
+dialog.alleen-lezen input:disabled, dialog.alleen-lezen select:disabled, dialog.alleen-lezen textarea:disabled { opacity: 0.75; }

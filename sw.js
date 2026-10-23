@@ -5,7 +5,7 @@
 */
 const VERSIE = "digigenda-20261023a";
 const BESTANDEN = [
-  "./", "index.html", "style.css", "app.js", "parse.js", "cloud.js", "toetsen.js", "manifest.webmanifest",
+  "./", "index.html", "style.css", "app.js", "parse.js", "ics.js", "cloud.js", "toetsen.js", "manifest.webmanifest",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"
 ];
 

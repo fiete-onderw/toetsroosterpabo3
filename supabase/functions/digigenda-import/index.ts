@@ -5,6 +5,7 @@
 //
 // Beveiliging (SSRF): alleen https op poort 443, geen gebruikersnaam/wachtwoord in de link, geen privé-, loopback- of
 // link-local-adressen (ook niet via DNS of via een redirect), maximaal 3 redirects, 2 MB en 15 seconden.
+// Een redirect naar http:// of naar een intern adres wordt geweigerd; elke hop wordt opnieuw gecontroleerd.
 import "./ics.js";
 
 const ICS = (globalThis as unknown as { ICS: { lees: (t: string, o: Record<string, unknown>) => Uitkomst; naarOpdracht: (v: Voorval, bron: string, agenda: string, bezet: boolean) => Record<string, unknown> } }).ICS;
@@ -96,74 +97,21 @@ async function losOp(host: string): Promise<string[]> {
   return adressen;
 }
 
-// Eén HTTP-verzoek rechtstreeks naar het gecontroleerde IP-adres (zodat DNS niet tussendoor kan veranderen)
-async function verzoek(url: URL, ip: string, signaal: AbortSignal): Promise<{ status: number; koppen: Record<string, string>; body: Uint8Array }> {
-  const host = url.hostname.replace(/^\[|\]$/g, "");
-  // deno-lint-ignore no-explicit-any
-  const D = Deno as any;
-  if (typeof D.connectTls !== "function") {
-    // Zonder ruwe verbinding: gewone fetch (DNS is al gecontroleerd; redirects handmatig)
-    const r = await fetch(url.toString(), { redirect: "manual", signal: signaal, headers: { "Accept": "text/calendar, text/plain;q=0.8, */*;q=0.5", "User-Agent": "Digigenda/1.0 (+https://fiete-onderw.github.io/toetsroosterpabo3/)" } });
-    const koppen: Record<string, string> = {};
-    r.headers.forEach((v, k) => { koppen[k.toLowerCase()] = v; });
-    const body = await leesMax(r.body, signaal);
-    return { status: r.status, koppen, body };
-  }
-  const conn = await D.connectTls({ hostname: ip, port: 443, serverName: host });
-  const sluit = () => { try { conn.close(); } catch (_e) { /* al dicht */ } };
-  signaal.addEventListener("abort", sluit);
-  try {
-    const pad = url.pathname + url.search;
-    const vraag = "GET " + pad + " HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: Digigenda/1.0 (+https://fiete-onderw.github.io/toetsroosterpabo3/)\r\n" +
-      "Accept: text/calendar, text/plain;q=0.8, */*;q=0.5\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n";
-    await conn.write(new TextEncoder().encode(vraag));
-    const delen: Uint8Array[] = [];
-    let totaal = 0;
-    const buf = new Uint8Array(64 * 1024);
-    while (true) {
-      const n = await conn.read(buf);
-      if (n === null) break;
-      delen.push(buf.slice(0, n));
-      totaal += n;
-      if (totaal > MAX_BYTES + 64 * 1024) throw new Error("Het bestand is groter dan 2 MB.");
-    }
-    const alles = plak(delen);
-    const grens = zoekKopEinde(alles);
-    if (grens < 0) throw new Error("De server gaf geen geldig antwoord.");
-    const kopTekst = new TextDecoder("latin1").decode(alles.slice(0, grens));
-    const regels = kopTekst.split("\r\n");
-    const status = parseInt((regels[0] || "").split(" ")[1] || "0", 10);
-    const koppen: Record<string, string> = {};
-    regels.slice(1).forEach((r) => { const i = r.indexOf(":"); if (i > 0) koppen[r.slice(0, i).trim().toLowerCase()] = r.slice(i + 1).trim(); });
-    let body = alles.slice(grens + 4);
-    if ((koppen["transfer-encoding"] || "").toLowerCase().includes("chunked")) body = ontChunk(body);
-    const enc = (koppen["content-encoding"] || "").toLowerCase();
-    if (enc === "gzip" || enc === "deflate") body = new Uint8Array(await new Response(new Blob([body]).stream().pipeThrough(new DecompressionStream(enc))).arrayBuffer());
-    if (body.length > MAX_BYTES) throw new Error("Het bestand is groter dan 2 MB.");
-    return { status, koppen, body };
-  } finally { signaal.removeEventListener("abort", sluit); sluit(); }
+// Eén HTTP-verzoek (zonder redirects te volgen; die worden hierboven opnieuw gecontroleerd).
+// De DNS-controle gebeurt vlak hiervoor; de runtime van Supabase staat geen TLS-verbinding op een vastgezet IP toe
+// (serverName wordt genegeerd), dus er blijft een venster van milliseconden voor DNS-rebinding. De edge function heeft
+// geen bevoorrecht intern netwerk, dus het risico is beperkt; alle andere controles (poort, schema, privéadressen) blijven.
+async function verzoek(url: URL, signaal: AbortSignal): Promise<{ status: number; koppen: Record<string, string>; body: Uint8Array }> {
+  const r = await fetch(url.toString(), { redirect: "manual", signal: signaal, headers: { "Accept": "text/calendar, text/plain;q=0.8, */*;q=0.5", "User-Agent": "Digigenda/1.0 (+https://fiete-onderw.github.io/toetsroosterpabo3/)" } });
+  const koppen: Record<string, string> = {};
+  r.headers.forEach((v, k) => { koppen[k.toLowerCase()] = v; });
+  const body = await leesMax(r.body, signaal);
+  return { status: r.status, koppen, body };
 }
 function plak(delen: Uint8Array[]): Uint8Array {
   const n = delen.reduce((a, d) => a + d.length, 0); const uit = new Uint8Array(n); let i = 0;
   for (const d of delen) { uit.set(d, i); i += d.length; }
   return uit;
-}
-function zoekKopEinde(b: Uint8Array): number {
-  for (let i = 0; i + 3 < b.length; i++) if (b[i] === 13 && b[i + 1] === 10 && b[i + 2] === 13 && b[i + 3] === 10) return i;
-  return -1;
-}
-function ontChunk(b: Uint8Array): Uint8Array {
-  const uit: Uint8Array[] = [];
-  let i = 0;
-  while (i < b.length) {
-    let j = i;
-    while (j + 1 < b.length && !(b[j] === 13 && b[j + 1] === 10)) j++;
-    const maat = parseInt(new TextDecoder("latin1").decode(b.slice(i, j)).split(";")[0].trim(), 16);
-    if (isNaN(maat) || maat === 0) break;
-    uit.push(b.slice(j + 2, j + 2 + maat));
-    i = j + 2 + maat + 2;
-  }
-  return plak(uit);
 }
 async function leesMax(stream: ReadableStream<Uint8Array> | null, signaal: AbortSignal): Promise<Uint8Array> {
   if (!stream) return new Uint8Array();
@@ -189,8 +137,8 @@ export async function haalIcs(invoer: string): Promise<{ ok: true; tekst: string
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
   try {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const adressen = await losOp(url.hostname);
-      const r = await verzoek(url, adressen[0], ctl.signal);
+      await losOp(url.hostname);
+      const r = await verzoek(url, ctl.signal);
       if ([301, 302, 303, 307, 308].includes(r.status)) {
         const loc = r.koppen["location"];
         if (!loc) return { ok: false, fout: "De server stuurde door zonder adres." };

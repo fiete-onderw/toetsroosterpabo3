@@ -10,13 +10,12 @@ Deno.serve(async (req: Request) => {
   if (!/^[a-f0-9]{32,64}$/.test(code)) {
     return new Response("Deze agenda-link is ongeldig.", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
+  // kal_ics_data is alleen voor de service-rol: de geheime code wordt hier gecontroleerd, niet in de browser.
   const supa = Deno.env.get("SUPABASE_URL") ?? "";
-  const sleutel = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  const r = await fetch(supa + "/rest/v1/rpc/kal_ics_data", {
-    method: "POST",
-    headers: { apikey: sleutel, Authorization: "Bearer " + sleutel, "Content-Type": "application/json" },
-    body: JSON.stringify({ p_code: code })
-  });
+  const sleutel = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const kop: Record<string, string> = { apikey: sleutel, "Content-Type": "application/json" };
+  if (sleutel.startsWith("eyJ")) kop.Authorization = "Bearer " + sleutel;
+  const r = await fetch(supa + "/rest/v1/rpc/kal_ics_data", { method: "POST", headers: kop, body: JSON.stringify({ p_code: code }) });
   if (!r.ok) return new Response("De agenda is even niet bereikbaar.", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   const data = await r.json();
   if (!data || !data.ok) {

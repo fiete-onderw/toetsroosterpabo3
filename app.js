@@ -1486,16 +1486,18 @@
 
   let syncBezig = false;
   let syncNogEens = false;
+  let stilTekenen = false;
+  const stil = (fn) => { stilTekenen = true; try { fn(); } finally { stilTekenen = false; } };
   async function synchroniseer() {
     if (!actief()) return;
     if (syncBezig) { syncNogEens = true; return; }
     const naam = sessie.naam;
     const token = sessie.token;
     const w = wachtrij(naam);
-    if (!w.bewaar.length && !w.verwijder.length) { syncStatus = "ok"; if (accountPlek) tekenAccount(); return; }
+    if (!w.bewaar.length && !w.verwijder.length) { syncStatus = "ok"; if (accountPlek) stil(tekenAccount); return; }
     syncBezig = true;
     syncStatus = "bezig";
-    if (accountPlek) tekenAccount();
+    if (accountPlek) stil(tekenAccount);
     bewaar(WACHT + naam, { bewaar: [], verwijder: [] });
     try {
       const lijst = opdrachten.filter((o) => w.bewaar.includes(o.id));
@@ -1510,12 +1512,12 @@
       syncStatus = "fout";
       syncBezig = false;
       if (fout.verlopen) return sessieVerlopen();
-      if (accountPlek) tekenAccount();
+      if (accountPlek) stil(tekenAccount);
       return;
     }
     syncBezig = false;
     if (syncNogEens) { syncNogEens = false; return synchroniseer(); }
-    if (accountPlek) tekenAccount();
+    if (accountPlek) stil(tekenAccount);
   }
 
   function neemServerInstellingen(i) {
@@ -1538,11 +1540,11 @@
       bewaar(CACHE + sessie.naam, opdrachten);
       neemServerInstellingen(r.instellingen);
       syncStatus = "ok";
-      tekenAlles();
+      stil(tekenAlles);
     } catch (fout) {
       if (fout.verlopen) return sessieVerlopen();
       syncStatus = "fout";
-      if (accountPlek) tekenAccount();
+      if (accountPlek) stil(tekenAccount);
     }
   }
 
@@ -1728,6 +1730,8 @@
   function tekenAccount(vulNaam) {
     const el = accountPlek;
     if (!el) return;
+    // Stille verversing (sync op de achtergrond): niet opnieuw tekenen terwijl iemand een pincode of naam typt
+    if (stilTekenen && document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
     if (!window.CLOUD || !CLOUD.aan) { el.innerHTML = ""; return; }
     const inWelkom = el.id === "welkom-account";
     const kop = (t, l) => inWelkom ? "" : '<div class="dagkop"><h4>' + t + "</h4>" + (l ? '<span class="label">' + l + "</span>" : "") + "</div>";
@@ -1837,17 +1841,18 @@
         const data = JSON.parse(lezer.result);
         const lijst = Array.isArray(data) ? data : data.opdrachten;
         if (!Array.isArray(lijst)) throw new Error("geen lijst");
-        let erbij = 0;
+        let erbij = 0, teVeel = 0;
         const ids = [];
         lijst.forEach((o) => {
           const schoon = normaal(o);
           if (!schoon) return;
+          if (opdrachten.length >= 1000 && !opdrachten.some((x) => x.id === schoon.id)) { teVeel++; return; }
           const bestaand = opdrachten.findIndex((x) => x.id === schoon.id);
           if (bestaand >= 0) opdrachten[bestaand] = schoon; else { opdrachten.push(schoon); erbij++; }
           ids.push(schoon.id);
         });
         opslaan(ids);
-        meld("Back-up teruggezet: " + erbij + " nieuwe opdrachten toegevoegd.");
+        meld("Back-up teruggezet: " + erbij + " nieuwe opdrachten toegevoegd." + (teVeel ? " " + teVeel + " overgeslagen: het maximum is 1000 opdrachten." : ""));
       } catch (err) {
         meld("Dit bestand is geen geldige back-up. Kies het .json-bestand dat je eerder hebt gedownload.");
       }

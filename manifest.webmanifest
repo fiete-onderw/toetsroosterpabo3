@@ -8,6 +8,16 @@
   "display": "standalone",
   "background_color": "#f6efec",
   "theme_color": "#2f5d8a",
+  "shortcuts": [
+    { "name": "Nieuw item", "short_name": "Nieuw", "description": "Iets toevoegen aan je agenda", "url": "./?nieuw=1", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Vandaag", "short_name": "Vandaag", "description": "Wat is er nu?", "url": "./?scherm=vandaag", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "share_target": {
+    "action": "./",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": { "title": "titel", "text": "tekst", "url": "url", "files": [{ "name": "bestand", "accept": ["text/calendar", ".ics", ".ical"] }] }
+  },
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

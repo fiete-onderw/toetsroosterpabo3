@@ -24,8 +24,27 @@ Gemaakt voor HAN Pabo jaar 3 (studiejaar 2026–2027), maar ook bruikbaar voor w
   (→ vandaag / → morgen). Eén keer per dag krijg je een rustige melding als er nog iets openstaat.
 - **Meldingen:** 15 minuten vóór een afspraak en elke ochtend om 07:30 een dagoverzicht (aan te zetten in de instellingen,
   account nodig). Op de iPhone werkt dit alleen als Digigenda op je beginscherm staat (iOS 16.4 of nieuwer).
-- **Als app op je beginscherm**, met eigen icoon en offline werken (iPhone: Safari → Deel → Zet op beginscherm).
+- **Als app op je beginscherm**, met eigen icoon en offline werken (iPhone: Safari → Deel → Zet op beginscherm). De app
+  opent direct uit de cache en haalt op de achtergrond de nieuwste versie en je opdrachten op.
 - **Koppelen aan je iPhone-agenda:** in de instellingen maak je een geheime agenda-link; je iPhone ververst die zelf, ongeveer elk uur.
+- **Agenda's binnenhalen** (werkrooster, schoolrooster, Google, iCloud): Instellingen → *Agenda's binnenhalen*. Drie routes,
+  van makkelijk naar zwaar:
+  1. **Abonneren via een link** (webcal/https): Digigenda ververst elk uur vanzelf (account nodig; de link wordt versleuteld
+     bewaard). Werkt met een gepubliceerde Outlook-agenda, de geheime Google-link, een openbare iCloud-agenda en de meeste
+     rooster-apps (Shiftbase, Planday, Het Rooster…). Werkgevers kunnen dit uitzetten; de app legt per dienst uit waar de link
+     staat en wat je dan kunt doen.
+  2. **Bestand importeren** (.ics uit Outlook, Google of iCloud). Opnieuw importeren werkt dezelfde afspraken bij, zonder dubbelen.
+  3. **Tekst plakken** (een .ics-bijlage of agenda-tekst) in het importvenster of gewoon in de snelle invoer. Op Android kun je
+     ook rechtstreeks naar Digigenda delen; iOS ondersteunt delen naar web-apps niet.
+  Vóór het toevoegen zie je een voorbeeld, kies je de agenda (werk/school/persoonlijk) en kun je **alleen als bezet tonen**
+  kiezen (geen titels, plaatsen of notities bewaren). Een hele import verwijder je in één keer. Herhalingen, uitzonderingen,
+  geannuleerde afspraken, tijdzones (ook Windows-namen uit Outlook) en nachtdiensten worden correct gelezen.
+  Waarom er geen "Inloggen met Microsoft/Google" is, staat in `docs/import-onderzoek.md`.
+- **Digigenda plant mee** (uit te zetten in Instellingen → Meeplannen): vrije tijd in de dagweergave ("15:00–18:00 vrij"),
+  **Plan in** zet een to-do met één tik in het eerste vrije uur, **Studieblokken plannen** stelt studieblokken voor vóór een
+  toets of deadline (ook bij de Pabo-toetsen), een **dagstart**-kaart voor to-do's van gisteren en na 20:00 een **avondblik**
+  op morgen.
+- **Nachtdiensten:** een afspraak die eindigt vóór hij begint (22:00–06:00) loopt door tot de volgende ochtend.
 
 ## Waar worden mijn opdrachten bewaard?
 
@@ -41,7 +60,8 @@ apparaat waar je inlogt. Opdrachten die je al zonder account had, gaan automatis
 - Een pincode van 4 cijfers blijft geen sterke beveiliging. Zet er alleen planning in, niets persoonlijks of gevoeligs.
 - Pincode vergeten? Er is geen herstelknop; de beheerder kan je account in Supabase verwijderen.
 - **Face ID / vingerafdruk:** na het inloggen kun je in de instellingen Face ID aanzetten. Daarmee ontgrendel je je opgeslagen
-  inlog op dat apparaat. De pincode blijft de controle op de server.
+  inlog op dat apparaat. De pincode blijft de controle op de server. Je hoeft pas opnieuw te ontgrendelen na een tijd zonder
+  gebruik (standaard 15 minuten; instelbaar van "altijd" tot 4 uur).
 
 ## Toetsdata aanpassen
 
@@ -59,6 +79,11 @@ Alle vaste Pabo-gegevens staan in **`toetsen.js`**. Zodra een toetsdatum bekend 
 - De website heeft een Content-Security-Policy: alleen eigen scripts, en alleen verbinding met Supabase.
 - Meldingen gaan alleen naar apparaten die nog ingelogd zijn: uitloggen, een nieuwe pincode of 'uitloggen op alle apparaten'
   stopt ze vanzelf. De sleutels voor meldingen staan alleen in de database (`kalender.config`), niet in deze repository.
+  Een tik op een melding opent direct de afspraak waar hij over gaat.
+- Links van binnengehaalde agenda's worden versleuteld bewaard (sleutel in `kalender.config`) en alleen door de serverfunctie
+  gelezen. Die serverfunctie haalt alleen https-links op, weigert interne adressen (ook via DNS of redirects), leest hoogstens
+  2 MB en wacht hoogstens 15 seconden. Per account hoogstens 12 keer per uur.
+- De volledige audit staat in `docs/beveiliging-audit.md`.
 
 ## Beheer (Supabase)
 
@@ -69,7 +94,13 @@ Alle vaste Pabo-gegevens staan in **`toetsen.js`**. Zodra een toetsdatum bekend 
    (pg_cron) kijkt elke minuut of er iets te melden valt en roept de functie dan aan met een geheim. Bij een nieuwe installatie:
    maak een VAPID-sleutelpaar en een lang willekeurig geheim, zet ze in `kalender.config` (zie `supabase.sql`) en zet de
    publieke VAPID-sleutel in `cloud.js`.
-4. In `cloud.js` staan de project-URL en de publishable key. Maak `SLEUTEL` leeg om online opslaan uit te zetten.
+4. **Agenda's binnenhalen:** de serverfunctie staat in `supabase/functions/digigenda-import/` (zonder JWT-controle; controleert
+   zelf het inlogbewijs). `ics.js` daarin is een kopie van `ics.js` in de hoofdmap. Een planner (`digigenda-imports`, elk uur)
+   ververst de link-imports.
+5. In `cloud.js` staan de project-URL en de publishable key. Maak `SLEUTEL` leeg om online opslaan uit te zetten.
+6. **Zelf uitvoeren in de SQL-editor:** het blok *Versie 6b* onderaan `supabase.sql` (het nachtelijke opruimen van rijen die
+   bij een ververste of verwijderde import horen). De beheerconnector vraagt bij `DELETE` om een bevestiging en kon dat blok
+   daarom niet uitvoeren. Zonder dit blok werkt alles; de app ruimt die rijen zelf op.
 
 ## Bestanden
 
@@ -79,12 +110,16 @@ Alle vaste Pabo-gegevens staan in **`toetsen.js`**. Zodra een toetsdatum bekend 
 | `style.css` | Opmaak (licht en donker) |
 | `app.js` | Werking van de agenda |
 | `parse.js` | Snelle invoer: zet een getypte regel om in dag, tijd, agenda en titel |
+| `ics.js` | Leest agendabestanden (.ics): herhalingen, uitzonderingen, tijdzones, hele dagen |
 | `cloud.js` | Verbinding met Supabase (inloggen, online opslaan) en Face ID |
 | `toetsen.js` | Toetsen, periodes en vakanties van HAN Pabo 3 (hier pas je data aan) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | App op je beginscherm en offline werken |
 | `supabase.sql` | Database-opzet voor Supabase |
 | `supabase/functions/digigenda-agenda/` | Serverfunctie voor het agenda-abonnement (.ics) |
 | `supabase/functions/digigenda-meldingen/` | Serverfunctie die pushmeldingen versleutelt en verstuurt |
+| `supabase/functions/digigenda-import/` | Serverfunctie die agendalinks veilig ophaalt en leest |
+| `docs/` | Onderzoek importroutes, testresultaten per route, beveiligingsaudit, schets van het meeplannen |
+| `tests/` | Alle tests (zie `tests/README.md`) |
 
 ## Bronnen
 

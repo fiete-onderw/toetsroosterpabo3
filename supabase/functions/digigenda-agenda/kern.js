@@ -108,7 +108,9 @@ export function maakIcs(data, planning, nu) {
     if (o.tijd && /^\d{2}:\d{2}$/.test(o.tijd)) {
       r.push("BEGIN:VEVENT", "UID:" + uid, "DTSTAMP:" + dtstamp,
         "DTSTART;TZID=Europe/Amsterdam:" + datumIcs(o.datum) + "T" + o.tijd.replace(":", "") + "00",
-        eind && eind > o.tijd ? "DTEND;TZID=Europe/Amsterdam:" + datumIcs(o.datum) + "T" + eind.replace(":", "") + "00" : "DURATION:PT1H",
+        eind && eind > o.tijd ? "DTEND;TZID=Europe/Amsterdam:" + datumIcs(o.datum) + "T" + eind.replace(":", "") + "00"
+          : eind && eind < o.tijd ? "DTEND;TZID=Europe/Amsterdam:" + volgendeDag(o.datum) + "T" + eind.replace(":", "") + "00"   // nachtdienst: eindigt de volgende dag
+          : "DURATION:PT1H",
         "SUMMARY:" + tekst(titel));
       if (omschrijving) r.push("DESCRIPTION:" + tekst(omschrijving));
       r.push("CATEGORIES:" + tekst(categorie), "END:VEVENT");

@@ -28,6 +28,18 @@ window.CLOUD = (function () {
     return res.json();
   }
 
+  async function serverfunctie(naam, body) {
+    let res;
+    try {
+      res = await fetch(URL + "/functions/v1/" + naam, {
+        method: "POST",
+        headers: { "apikey": SLEUTEL, "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+    } catch (e) { throw new Error("Geen verbinding met de server. Ben je online?"); }
+    return res.json().catch(() => ({ ok: false, fout: "De server gaf een onleesbaar antwoord." }));
+  }
+
   return {
     aan: !!(URL && SLEUTEL),
     registreer: (naam, pin) => rpc("kal_registreer", { p_naam: naam, p_pin: pin }),
@@ -44,17 +56,13 @@ window.CLOUD = (function () {
     pushAfmelden: (token, endpoint) => rpc("kal_push_afmelden", { p_token: token, p_endpoint: endpoint }),
     // Publieke VAPID-sleutel: hiermee weet de push-dienst van Apple/Google dat meldingen van Digigenda komen
     VAPID: "BGcysEYblBc2uJ1jazXcBv0BCmMvRnYbbfZXQsE8WcI-VR11KFYs5A2UEg-u6WVMT-ss4Wp_nV46pVsZu5qGTH8",
-    testMelding: async (token) => {
-      let res;
-      try {
-        res = await fetch(URL + "/functions/v1/digigenda-meldingen", {
-          method: "POST",
-          headers: { "apikey": SLEUTEL, "Content-Type": "application/json" },
-          body: JSON.stringify({ test: true, token: token })
-        });
-      } catch (e) { throw new Error("Geen verbinding met de server. Ben je online?"); }
-      return res.json().catch(() => ({ ok: false }));
-    },
+    testMelding: (token) => serverfunctie("digigenda-meldingen", { test: true, token: token }),
+    // Agenda's binnenhalen (import): lijst, bewaren, verwijderen via de database; ophalen/verversen via de serverfunctie
+    importsLijst: (token) => rpc("kal_imports_lijst", { p_token: token }),
+    importBewaar: (token, imp) => rpc("kal_import_bewaar", { p_token: token, p_import: imp }),
+    importVerwijder: (token, id) => rpc("kal_import_verwijder", { p_token: token, p_id: id }),
+    importVoorbeeld: (token, url) => serverfunctie("digigenda-import", { token: token, url: url }),
+    importVerversen: (token, id) => serverfunctie("digigenda-import", { token: token, id: id }),
     // Adres voor het agenda-abonnement (iPhone/Mac Agenda, Google Agenda)
     agendaUrl: (code) => URL + "/functions/v1/digigenda-agenda?code=" + encodeURIComponent(code)
   };

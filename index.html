@@ -141,6 +141,10 @@
     <textarea id="f-notitie" name="notitie" rows="3" maxlength="400"></textarea>
     <label class="vink-label" id="f-klaar-rij"><input id="f-klaar" name="klaar" type="checkbox"> Afgerond</label>
     <p class="fout" id="f-fout" role="alert"></p>
+    <div class="knoppen f-plannen">
+      <button type="button" class="zacht" id="f-plan" hidden>Plan in (eerste vrije uur)</button>
+      <button type="button" class="zacht" id="f-studie" hidden>Studieblokken plannen</button>
+    </div>
     <div class="knoppen eind">
       <button type="button" class="gevaar" id="f-verwijder" hidden>Verwijderen</button>
       <span class="ruimte"></span>
@@ -156,10 +160,14 @@
   <div class="actieblad-knoppen">
     <button type="button" data-menu="klaar"></button>
     <button type="button" data-menu="schuif"></button>
+    <button type="button" data-menu="plan">Plan in (eerste vrije uur)</button>
     <button type="button" data-menu="wijzig">Wijzigen</button>
     <button type="button" data-menu="sluit" class="actieblad-sluit">Annuleren</button>
   </div>
 </dialog>
+
+<!-- Studieblokken plannen vóór een toets of deadline -->
+<dialog id="studieVenster" class="groot-venster" aria-labelledby="studie-titel"></dialog>
 
 <!-- Instellingen -->
 <dialog id="instellingen" class="groot-venster" aria-labelledby="inst-titel">
@@ -171,6 +179,7 @@
     <section class="inst-blok" id="inst-account"></section>
     <section class="inst-blok" id="inst-meldingen"></section>
     <section class="inst-blok" id="inst-agendas"></section>
+    <section class="inst-blok" id="inst-meeplannen"></section>
     <section class="inst-blok" id="inst-import"></section>
     <section class="inst-blok" id="inst-koppeling"></section>
     <section class="inst-blok" id="inst-beginscherm"></section>

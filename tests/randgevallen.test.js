@@ -28,7 +28,7 @@ const res = []; const check = (n, ok, x) => res.push((ok ? "PASS " : "FAIL ") + 
   async function maak(viewport, schema, extra) {
     const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, colorScheme: schema || "light", serviceWorkers: "block", hasTouch: viewport.width < 700, isMobile: viewport.width < 700, ...(extra || {}) });
     await ctx.route("https://**", (r) => r.abort());
-    await ctx.addInitScript(([d, i]) => { if (!localStorage.getItem("gezaaid")) { localStorage.setItem("pabo3-kalender-opdrachten-v1", JSON.stringify(d)); localStorage.setItem("digigenda-instellingen-v1", JSON.stringify(i)); localStorage.setItem("gezaaid", "1"); } }, [DATA, INST]);
+    await ctx.addInitScript(([d, i]) => { if (!localStorage.getItem("gezaaid")) { localStorage.setItem("pabo3-kalender-opdrachten-v1", JSON.stringify(d)); localStorage.setItem("digigenda-instellingen-v1", JSON.stringify(i)); localStorage.setItem("digigenda-voorkeur-v1", JSON.stringify({ verborgen: [], dagstartGezien: "2026-10-22" })); localStorage.setItem("gezaaid", "1"); } }, [DATA, INST]);
     const page = await ctx.newPage();
     await page.clock.install({ time: NU });
     page.on("pageerror", (e) => fouten.push(viewport.width + ": " + e.message));

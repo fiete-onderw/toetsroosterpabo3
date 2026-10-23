@@ -718,3 +718,28 @@ dialog.actieblad::backdrop { background: rgba(20, 22, 30, 0.35); }
 .blok.import .blok-tijd::before { content: "⇅ "; }
 .f-import { margin: 0 0 4px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 9%, var(--kaart)); color: var(--fg); }
 dialog.alleen-lezen input:disabled, dialog.alleen-lezen select:disabled, dialog.alleen-lezen textarea:disabled { opacity: 0.75; }
+
+/* ================= Meeplannen ================= */
+.gat { position: absolute; left: 4px; right: 4px; z-index: 0; pointer-events: none; border: 1px dashed color-mix(in srgb, var(--opdracht) 45%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--opdracht) 5%, transparent);
+  color: var(--muted); font-size: 11.5px; font-weight: 700; display: flex; align-items: flex-start; justify-content: flex-end; padding: 4px 8px; cursor: copy; text-align: right; }
+.gat:hover { background: color-mix(in srgb, var(--opdracht) 12%, transparent); color: var(--fg); }
+.gat span { line-height: 1.2; pointer-events: auto; cursor: copy; padding: 2px 4px; border-radius: 6px; }
+.gat span:hover { background: color-mix(in srgb, var(--opdracht) 18%, transparent); color: var(--fg); }
+.dagstart { border-radius: 14px; padding: 10px 12px 6px; background: color-mix(in srgb, var(--herkansing) 9%, var(--kaart)); }
+.dagstart .sectie-kop { margin-bottom: 0; }
+.ds-rij { grid-template-columns: 14px minmax(0, 1fr); row-gap: 4px; }
+.ds-stip { width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-top: 6px; }
+.ds-knoppen { grid-column: 2; display: flex; gap: 6px; flex-wrap: wrap; }
+.ds-knoppen .mini { padding: 4px 10px; }
+.avondblik .nu-wanneer { color: var(--muted); }
+.f-plannen { margin-top: 4px; }
+.f-plannen:not(:has(button:not([hidden]))) { display: none; }
+.studie-knop { display: flex; align-items: flex-end; }
+.studie-inhoud { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
+.studie-inhoud p { margin: 0; }
+.studie-inhoud .imp-form > div { display: flex; flex-direction: column; gap: 4px; }
+.studie-inhoud input[type="number"] { width: 5em; border: 1px solid var(--lijn); border-radius: 8px; padding: 8px 10px; background: var(--bg); font-size: 16px; }
+.studie-inhoud select { border: 1px solid var(--lijn); border-radius: 8px; padding: 8px 10px; background: var(--bg); font-size: 16px; }
+.studie-lijst .rij { padding: 6px 0; grid-template-columns: minmax(0, 1fr); }
+.rij.vast.met-studie .studie-knop { flex-basis: 100%; padding: 2px 0 0; font-size: 13px; }
+@media (max-width: 640px) { .studie-inhoud .imp-form { flex-wrap: wrap; } }

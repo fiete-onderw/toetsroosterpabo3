@@ -115,6 +115,11 @@
       meldingen: {
         ochtend: !(x.meldingen && x.meldingen.ochtend === false),
         afspraak: !(x.meldingen && x.meldingen.afspraak === false)
+      },
+      meeplannen: {
+        gaten: !(x.meeplannen && x.meeplannen.gaten === false),
+        dagstart: !(x.meeplannen && x.meeplannen.dagstart === false),
+        avond: !(x.meeplannen && x.meeplannen.avond === false)
       }
     };
   }
@@ -282,14 +287,16 @@
       (meta.length ? '<span class="rij-meta">' + esc(meta.join(" · ")) + "</span>" : "") +
       (o.notitie ? '<p class="rij-notitie">' + esc(o.notitie) + "</p>" : "") +
       "</div>" +
-      (veeg ? '<div class="rij-acties"><button type="button" class="mini" data-schuif="' + esc(o.id) + '">' + schuifLabel(o) + "</button></div>" : "") +
+      (veeg ? '<div class="rij-acties"><button type="button" class="mini" data-plan="' + esc(o.id) + '">Plan in</button><button type="button" class="mini" data-schuif="' + esc(o.id) + '">' + schuifLabel(o) + "</button></div>" : "") +
       "</li>";
   }
 
   function vastRij(v) {
-    return '<li class="rij vast" style="--c:' + vastKleur(v.soort) + '"><span class="vast-blok">' + slot() + "</span>" +
+    const studie = (v.soort === "lkt" || v.soort === "toets") && v.datum && v.datum > vandaag();
+    return '<li class="rij vast' + (studie ? " met-studie" : "") + '" style="--c:' + vastKleur(v.soort) + '"><span class="vast-blok">' + slot() + "</span>" +
       '<div class="rij-tekst"><span class="rij-titel">' + esc(v.titel) + '</span><span class="rij-meta">' + esc(VAST_LABEL[v.soort] || "") + "</span>" +
-      (v.uitleg ? '<p class="rij-notitie">' + esc(v.uitleg) + "</p>" : "") + "</div></li>";
+      (v.uitleg ? '<p class="rij-notitie">' + esc(v.uitleg) + "</p>" : "") +
+      (studie ? '<button type="button" class="tekstknop klein-knop studie-knop" data-studie-titel="' + esc(v.titel) + '" data-studie-datum="' + esc(v.datum) + '">Studieblokken plannen</button>' : "") + "</div></li>";
   }
 
   // Bovenkant van elk scherm: grote titel, één rustige regel eronder
@@ -424,9 +431,99 @@
   function kolomHtml(d, blokken, b, e, metTijd) {
     let h = '<div class="kolom' + (d === vandaag() ? " vandaag" : "") + '" data-tijdlijn-datum="' + d + '" data-begin="' + b + '" data-eind="' + e + '"' + (metTijd ? ' data-met-tijd="1"' : "") + ">";
     for (let u = b; u < e; u++) h += '<button type="button" class="uurvak" data-slot="' + d + "|" + pad(u) + ':00" aria-label="Toevoegen op ' + dagKort(d) + " om " + pad(u) + ':00"></button>';
+    if (metTijd && instellingen.meeplannen.gaten) {
+      gatenOp(d, 60).forEach((g) => {
+        const s0 = Math.max(g.s, b * 60), e0 = Math.min(g.e, e * 60);
+        if (e0 - s0 < 60) return;
+        h += '<button type="button" class="gat" data-gat="' + d + "|" + klok(s0) + "|" + klok(e0) + '" style="top:calc(var(--uurh) * ' + ((s0 - b * 60) / 60).toFixed(4) + ");height:calc(var(--uurh) * " + ((e0 - s0) / 60).toFixed(4) + ' - 2px)" aria-label="Vrij van ' + klok(s0) + " tot " + klok(e0) + ', iets inplannen"><span>' + klok(s0) + "–" + klok(e0) + " vrij</span></button>";
+      });
+    }
     h += blokken.map((x) => blokHtml(x, b, d, e)).join("");
     if (d === vandaag()) h += nuLijnHtml(b, e, metTijd);
     return h + "</div>";
+  }
+
+  // ---------- meeplannen: vrije tijd, inplannen, studieblokken ----------
+  const PLAN_BEGIN = 8 * 60, PLAN_EIND = 22 * 60;
+  // Vrije stukken op een dag tussen 08:00 en 22:00 (vandaag: vanaf nu, afgerond op een kwartier), minstens minDuur minuten
+  function gatenOp(d, minDuur, venster) {
+    const van = venster ? venster[0] : PLAN_BEGIN, tot = venster ? venster[1] : PLAN_EIND;
+    let start = van;
+    if (d === vandaag()) start = Math.max(start, Math.ceil(nuMinuten() / 15) * 15);
+    if (d < vandaag()) return [];
+    const bezet = blokkenOp(d).map((x) => [x.s, Math.min(x.e, 24 * 60)]).sort((a, b) => a[0] - b[0]);
+    const uit = [];
+    let p = start;
+    for (const [bs, be] of bezet) {
+      if (be <= p) continue;
+      if (bs > p && bs - p >= minDuur) uit.push({ s: p, e: Math.min(bs, tot) });
+      p = Math.max(p, be);
+      if (p >= tot) break;
+    }
+    if (p < tot && tot - p >= minDuur) uit.push({ s: p, e: tot });
+    return uit.filter((g) => g.e - g.s >= minDuur);
+  }
+  // Eerste gat van 'duur' minuten op of na een datum (hoogstens 'dagen' dagen vooruit); 'uiterlijk' = eindtijd die niet overschreden mag worden
+  function eersteGat(d, duur, dagen, uiterlijk) {
+    for (let i = 0; i <= dagen; i++) {
+      const dag = plusDagen(d, i);
+      const g = gatenOp(dag, duur, uiterlijk ? [PLAN_BEGIN, Math.min(PLAN_EIND, minuten(uiterlijk))] : null).find((x) => x.e - x.s >= duur);
+      if (g) return { datum: dag, s: g.s, e: g.s + duur };
+    }
+    return null;
+  }
+  // To-do met één tik inplannen in het eerste passende gat (wordt een blok in de agenda)
+  function planIn(id) {
+    const o = opdrachten.find((x) => x.id === id);
+    if (!o || o.tijd) return;
+    const v = vandaag();
+    const d = o.datum < v ? v : o.datum;
+    const duur = 60;
+    // Met een deadline-tijd: alleen die dag vóór die tijd; anders die dag, en pas daarna de dagen erna
+    const gat = eersteGat(d, duur, 0, o.eind) || (o.eind ? null : eersteGat(d, duur, 7, null));
+    if (!gat) { toast("Geen vrij uur gevonden op " + dagKort(d) + ". Kies zelf een tijd."); return openVenster(id); }
+    const oud = { datum: o.datum, tijd: o.tijd, eind: o.eind };
+    o.datum = gat.datum; o.tijd = klok(gat.s); o.eind = klok(gat.e);
+    opslaan([o.id]);
+    toast("Ingepland: " + dagKort(gat.datum) + " " + o.tijd + "–" + o.eind, () => { Object.assign(o, oud); opslaan([o.id]); }, { label: "Aanpassen", fn: () => openVenster(id) });
+  }
+  // Studieblokken vóór een toets of deadline: verspreid over verschillende dagen, liefst 's middags/'s avonds
+  function studieVoorstel(datum, aantal, duur) {
+    const v = vandaag();
+    const eerste = nuMinuten() >= 21 * 60 ? plusDagen(v, 1) : v;
+    const laatste = plusDagen(datum, -1);
+    const dagen = [];
+    for (let d = eerste; d <= laatste && dagen.length < 120; d = plusDagen(d, 1)) {
+      const g = gatenOp(d, duur, [13 * 60, 21 * 60]).concat(gatenOp(d, duur, [PLAN_BEGIN, PLAN_EIND]));
+      if (g.length) dagen.push({ datum: d, gaten: g });
+    }
+    const uit = [];
+    if (!dagen.length) return uit;
+    if (dagen.length >= aantal) {
+      // gelijkmatig verdelen, het laatste blok op de laatste vrije dag vóór de toets
+      for (let i = 0; i < aantal; i++) {
+        const idx = aantal === 1 ? dagen.length - 1 : Math.round(i * (dagen.length - 1) / (aantal - 1));
+        const dag = dagen[idx];
+        const g = dag.gaten[0];
+        uit.push({ datum: dag.datum, tijd: klok(g.s), eind: klok(g.s + duur) });
+      }
+    } else {
+      // minder vrije dagen dan blokken: meerdere per dag, zolang er gaten zijn
+      let rest = aantal;
+      while (rest > 0) {
+        let erbij = 0;
+        for (const dag of dagen) {
+          if (rest <= 0) break;
+          const g = dag.gaten.find((x) => x.e - x.s >= duur);
+          if (!g) continue;
+          uit.push({ datum: dag.datum, tijd: klok(g.s), eind: klok(g.s + duur) });
+          g.s += duur + 30; rest--; erbij++;
+        }
+        if (!erbij) break;
+      }
+      uit.sort((a, b) => a.datum.localeCompare(b.datum) || a.tijd.localeCompare(b.tijd));
+    }
+    return uit;
   }
   function rasterHtml(datums, perDag, bereik, klasse, metTijd) {
     const { b, e } = bereik;
@@ -474,6 +571,17 @@
     const hoofdX = bezig[0] || komend[0];
     if (!hoofdX) {
       const open = eigenOp(v).filter((o) => isTodo(o) && !o.klaar).length + nogOpen().length;
+      // Avondblik: na 20:00 laten zien hoe morgen begint
+      if (new Date().getHours() >= 20 && instellingen.meeplannen.avond) {
+        const m = plusDagen(v, 1);
+        const eersteM = blokkenOp(m).filter((x) => !x.vervolg)[0];
+        const todosM = eigenOp(m).filter((o) => isTodo(o) && !o.klaar).length;
+        const vastM = vastOp(m);
+        const tekstM = eersteM ? "Begint met " + eersteM.o.tijd + " " + eersteM.o.titel : (vastM.length ? vastM[0].titel : "Geen afspraken");
+        return '<div class="nu-binnen avondblik" style="--c:' + (eersteM ? agendaKleur(eersteM.o.agenda) : "var(--accent)") + '"><button type="button" class="nu-hoofd" data-kies="' + m + '">' +
+          '<span class="nu-wanneer">Morgen · ' + esc(DAGEN_LANG[ontleed(m).getDay()]) + '</span><span class="nu-titel">' + esc(tekstM) + "</span>" +
+          '<span class="nu-rest">' + (todosM ? todosM + (todosM === 1 ? " to-do" : " to-do’s") : "geen to-do’s") + (open ? " · vandaag nog " + open + " open" : "") + "</span></button></div>";
+      }
       return '<div class="nu-binnen leeg-nu"><span class="nu-wanneer">Rest van de dag</span><span class="nu-titel">Geen afspraken meer</span>' +
         '<span class="nu-rest">' + (open ? "Tijd voor je to-do’s." : "Lekker vrij.") + "</span></div>";
     }
@@ -524,7 +632,9 @@
     const vak = vakantieOp(s);
     const vast = vastOp(s);
     const eigen = eigenOp(s);
-    const eerder = isVandaag ? nogOpen() : [];
+    let eerder = isVandaag ? nogOpen() : [];
+    const dagstart = isVandaag && instellingen.meeplannen.dagstart && voorkeur.dagstartGezien !== v && eerder.length ? eerder : null;
+    if (dagstart) eerder = [];   // de kaart toont ze al
     const heleDag = eigen.filter(isHeleDag);
     const todos = eigen.filter(isTodo);
     const open = todos.filter((o) => !o.klaar);
@@ -543,6 +653,14 @@
 
     html += '<div class="dagindeling">';
     if (isVandaag) html += '<section class="nu-kaart" id="nuKaart" aria-live="polite">' + nuKaartInhoud() + "</section>";
+    if (dagstart) {
+      html += '<section class="dagstart" aria-label="To-do’s van eerder"><div class="sectie-kop"><h3 class="sectie-label">Nog open van eerder · ' + dagstart.length + '</h3>' +
+        '<button type="button" class="tekstknop klein-knop" data-dagstart="sluit">Laat maar</button></div><ul class="rijen">' +
+        dagstart.slice(0, 8).map((o) => '<li class="rij ds-rij" style="--c:' + agendaKleur(o.agenda) + '"><span class="ds-stip"></span><div class="rij-tekst" data-bewerk="' + esc(o.id) + '" role="button" tabindex="0" aria-label="Wijzigen: ' + esc(o.titel) + '"><span class="rij-titel">' + esc(o.titel) + '</span><span class="rij-meta">' + esc(vanLabel(o.datum)) + "</span></div>" +
+          '<div class="ds-knoppen"><button type="button" class="mini" data-ds="vandaag" data-id="' + esc(o.id) + '">Vandaag</button><button type="button" class="mini" data-ds="later" data-id="' + esc(o.id) + '">Later</button><button type="button" class="mini" data-ds="weg" data-id="' + esc(o.id) + '" aria-label="Weg: ' + esc(o.titel) + '">Weg</button></div></li>').join("") +
+        (dagstart.length > 8 ? '<li class="klein">… en nog ' + (dagstart.length - 8) + "</li>" : "") + "</ul>" +
+        (dagstart.length > 1 ? '<div class="knoppen"><button type="button" class="tekstknop klein-knop" data-ds="alles">Alles naar vandaag</button></div>' : "") + "</section>";
+    }
 
     // To-do's: eerst wat nog openstaat van eerder, dan vandaag, afgevinkt onderaan
     html += '<section class="dag-todo"><h3 class="sectie-label">To-do</h3>';
@@ -787,11 +905,13 @@
 
   // ---------- toast ----------
   let toastTimer = null;
-  function toast(tekst, ongedaan) {
+  function toast(tekst, ongedaan, extra) {
     const el = $("toast");
-    el.innerHTML = "<span>" + esc(tekst) + "</span>" + (ongedaan ? '<button type="button" class="tekstknop" id="toastOngedaan">Ongedaan maken</button>' : "");
+    el.innerHTML = "<span>" + esc(tekst) + "</span>" + (extra ? '<button type="button" class="tekstknop" id="toastExtra">' + esc(extra.label) + "</button>" : "") +
+      (ongedaan ? '<button type="button" class="tekstknop" id="toastOngedaan">Ongedaan maken</button>' : "");
     el.hidden = false;
     if (ongedaan) $("toastOngedaan").onclick = () => { ongedaan(); el.hidden = true; };
+    if (extra) $("toastExtra").onclick = () => { el.hidden = true; extra.fn(); };
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.hidden = true; }, ongedaan ? 6000 : 3500);
   }
@@ -923,6 +1043,8 @@
     }
     $("f-verwijder").hidden = !o || geimporteerd;
     venster.querySelector('button[type="submit"]').hidden = geimporteerd;
+    $("f-plan").hidden = !(o && !geimporteerd && isTodo(o) && !o.klaar);
+    $("f-studie").hidden = !(o && !geimporteerd && ["toets", "herkansing", "deadline"].includes(o.soort) && o.datum > vandaag());
     if (typeof venster.showModal === "function") venster.showModal(); else venster.setAttribute("open", "");
     if (!geimporteerd) $("f-titel").focus(); else $("f-annuleer").focus();
   }
@@ -972,6 +1094,8 @@
     opslaan([id]);
   });
   $("f-annuleer").addEventListener("click", sluitVenster);
+  $("f-plan").addEventListener("click", () => { const id = bewerkId; sluitVenster(); planIn(id); });
+  $("f-studie").addEventListener("click", () => { const o = opdrachten.find((x) => x.id === bewerkId); if (!o) return; sluitVenster(); openStudie(o.id, o.titel, o.datum); });
   venster.addEventListener("click", (e) => { const k = e.target.closest("[data-import-beheer]"); if (k) { sluitVenster(); openImportVenster("lijst"); } });
   $("f-verwijder").addEventListener("click", () => {
     if (verwijderStap === 0) { verwijderStap = 1; $("f-verwijder").textContent = "Zeker weten? Klik nogmaals"; return; }
@@ -996,6 +1120,22 @@
     o.datum = o.datum < v ? v : plusDagen(o.datum, 1);
     opslaan([o.id]);
     toast("Verplaatst naar " + dagKort(o.datum), () => { o.datum = oud; opslaan([o.id]); });
+  }
+  function dagstartActie(actie, id) {
+    const v = vandaag();
+    if (actie === "alles") return allesNaarVandaag();
+    const o = opdrachten.find((x) => x.id === id);
+    if (!o) return;
+    if (actie === "weg") {
+      const kopie = Object.assign({}, o);
+      opdrachten = opdrachten.filter((x) => x.id !== id);
+      opslaan([], [id]);
+      return toast("Weggehaald: " + kopie.titel, () => { opdrachten.push(kopie); opslaan([id]); });
+    }
+    const oud = o.datum;
+    o.datum = actie === "later" ? plusDagen(v, 1) : v;
+    opslaan([o.id]);
+    toast((actie === "later" ? "Naar morgen: " : "Naar vandaag: ") + o.titel, () => { o.datum = oud; opslaan([o.id]); });
   }
   function allesNaarVandaag() {
     const v = vandaag();
@@ -1034,7 +1174,7 @@
   document.querySelectorAll("[data-weergave]").forEach((b) => b.addEventListener("click", () => zetWeergave(b.dataset.weergave)));
 
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-klaar],[data-bewerk],[data-nieuw],[data-schuif],[data-nav],[data-naar-dag],[data-filter],[data-open],[data-alles-vandaag],[data-onder],[data-modus],[data-kies],[data-slot],[data-weekend],[data-week],[data-uitklap],[data-todo-alles],.chip.eigen,.dag,[data-j]");
+    const t = e.target.closest("[data-klaar],[data-bewerk],[data-nieuw],[data-schuif],[data-nav],[data-naar-dag],[data-filter],[data-open],[data-alles-vandaag],[data-onder],[data-modus],[data-kies],[data-slot],[data-weekend],[data-week],[data-uitklap],[data-todo-alles],[data-gat],[data-plan],[data-dagstart],[data-ds],[data-studie-titel],.chip.eigen,.dag,[data-j]");
     if (!t) return;
     if (t.closest("#venster")) return;
     // Maand: op de telefoon opent een dag de dagweergave, op de laptop het zijpaneel
@@ -1053,6 +1193,11 @@
     if (t.dataset.week) { zetDag(plusDagen(gekozen, 7 * +t.dataset.week)); tekenHoofd(); tekenVoorbeeld(); return; }
     if (t.dataset.uitklap) { dagUitgeklapt = t.dataset.uitklap === "1"; return tekenHoofd(); }
     if (t.dataset.todoAlles) { todoAlles = true; return tekenHoofd(); }
+    if (t.dataset.gat) { const [d, van, tot] = t.dataset.gat.split("|"); openVenster(null, d, van); if (minuten(tot) - minuten(van) < 60) $("f-eind").value = tot; return; }
+    if (t.dataset.plan) return planIn(t.dataset.plan);
+    if (t.dataset.dagstart === "sluit") { voorkeur.dagstartGezien = vandaag(); bewaarVoorkeur(); return tekenHoofd(); }
+    if (t.dataset.ds) return dagstartActie(t.dataset.ds, t.dataset.id);
+    if (t.dataset.studieTitel) return openStudie(null, t.dataset.studieTitel, t.dataset.studieDatum);
     if (t.dataset.slot) { const [d, tijd] = t.dataset.slot.split("|"); return openVenster(null, d, tijd); }
     if (t.dataset.weekend) { weekendTonen = t.dataset.weekend === "1"; return tekenHoofd(); }
     if (t.dataset.j !== undefined && t.closest("#jaarstrook")) { maand = { j: +t.dataset.j, m: +t.dataset.m }; tekenJaarstrook(); tekenHoofd(); return; }
@@ -1084,6 +1229,7 @@
     const sb = rijMenu.querySelector('[data-menu="schuif"]');
     sb.hidden = o.klaar;
     sb.textContent = o.datum < vandaag() ? "Naar vandaag" : o.datum === vandaag() ? "Naar morgen" : "Een dag later";
+    rijMenu.querySelector('[data-menu="plan"]').hidden = o.klaar;
     if (typeof rijMenu.showModal === "function") rijMenu.showModal(); else rijMenu.setAttribute("open", "");
   }
   function sluitRijMenu() { if (typeof rijMenu.close === "function") rijMenu.close(); else rijMenu.removeAttribute("open"); }
@@ -1096,6 +1242,7 @@
     if (k.dataset.menu === "klaar") wisselKlaar(id);
     else if (k.dataset.menu === "schuif") schuif(id);
     else if (k.dataset.menu === "wijzig") openVenster(id);
+    else if (k.dataset.menu === "plan") planIn(id);
   });
 
   let veeg = null, langTimer = null, klikNegeren = false;
@@ -1210,6 +1357,13 @@
       paboKeuzeHtml("inst", instellingen.pabo, instellingen.doelgroep, agendaAan("school"));
 
     tekenImportBlok();
+    // Meeplannen
+    const mp = instellingen.meeplannen;
+    $("inst-meeplannen").innerHTML = "<h4>Meeplannen</h4>" +
+      '<p class="klein">Digigenda doet stille voorstellen. Alles is wegtikbaar; hier zet je het uit.</p>' +
+      '<label class="vink-label"><input type="checkbox" id="mp-gaten"' + (mp.gaten ? " checked" : "") + '><span>Vrije tijd tonen in de dagweergave <span class="klein">(“15:00–18:00 vrij”; to-do’s met <em>Plan in</em> in een gat zetten)</span></span></label>' +
+      '<label class="vink-label"><input type="checkbox" id="mp-dagstart"' + (mp.dagstart ? " checked" : "") + '><span>Dagstart <span class="klein">(eerste keer per dag: to-do’s van eerder → vandaag, later of weg)</span></span></label>' +
+      '<label class="vink-label"><input type="checkbox" id="mp-avond"' + (mp.avond ? " checked" : "") + '><span>Avondblik <span class="klein">(na 20:00 laat de Nu-kaart zien hoe morgen begint)</span></span></label>';
     // Koppelen aan iPhone-agenda
     let k = "<h4>Koppelen aan je iPhone-agenda</h4>";
     if (!actief()) {
@@ -1378,6 +1532,7 @@
       bewaarVoorkeur(); bewaarInstellingen(); tekenAlles();
     }
     if (t.id === "inst-pabo") { instellingen.pabo = t.checked; bewaarInstellingen(); tekenAlles(); }
+    if (t.id === "mp-gaten" || t.id === "mp-dagstart" || t.id === "mp-avond") { instellingen.meeplannen[t.id.slice(3)] = t.checked; bewaarInstellingen(); tekenHoofd(); }
     if (t.id === "push-ochtend" || t.id === "push-afspraak") {
       instellingen.meldingen[t.id === "push-ochtend" ? "ochtend" : "afspraak"] = t.checked;
       bewaarInstellingen();
@@ -2182,6 +2337,55 @@
     snel.value = [titel, tekst].filter(Boolean).join(" ").slice(0, 4000);
     groeiVeld(); tekenVoorbeeld(); snel.focus();
   }
+
+  // ---------- studieblokken-venster ----------
+  const studieVenster = $("studieVenster");
+  let studieData = null;
+  function openStudie(id, titel, datum) {
+    if (sessie && !ontgrendeld) { toast("Ontgrendel eerst je account."); return; }
+    studieData = { id, titel, datum, aantal: 4, duur: 90, voorstel: null };
+    tekenStudie();
+    if (typeof studieVenster.showModal === "function") studieVenster.showModal(); else studieVenster.setAttribute("open", "");
+  }
+  function sluitStudie() { if (typeof studieVenster.close === "function") studieVenster.close(); else studieVenster.removeAttribute("open"); }
+  function tekenStudie() {
+    const d = studieData;
+    const dagen = Math.round((ontleed(d.datum) - ontleed(vandaag())) / 864e5);
+    let h = '<div class="venster-kop"><h3 id="studie-titel">Studieblokken</h3><button type="button" class="pijl" data-studie-sluit aria-label="Sluiten">×</button></div><div class="venster-inhoud studie-inhoud">' +
+      "<p>Voor <strong>" + esc(d.titel) + "</strong> op " + esc(dagKort(d.datum)) + " (over " + dagen + (dagen === 1 ? " dag" : " dagen") + "). Digigenda zoekt vrije tijd vóór die dag, liefst ’s middags of ’s avonds en verspreid over verschillende dagen.</p>" +
+      '<form id="studie-form" class="imp-form" novalidate><div><label for="studie-aantal">Blokken</label><input id="studie-aantal" type="number" min="1" max="12" value="' + d.aantal + '"></div>' +
+      '<div><label for="studie-duur">Duur</label><select id="studie-duur">' + [45, 60, 90, 120].map((m) => '<option value="' + m + '"' + (m === d.duur ? " selected" : "") + ">" + duurTekst(m) + "</option>").join("") + "</select></div>" +
+      '<div class="studie-knop"><button type="submit" class="hoofd">' + (d.voorstel ? "Opnieuw" : "Voorstel maken") + "</button></div></form>";
+    if (d.voorstel) {
+      h += d.voorstel.length ? '<ul class="rijen studie-lijst">' + d.voorstel.map((b, i) => '<li class="rij"><label class="vink-label"><input type="checkbox" data-studie-vink="' + i + '"' + (b.aan ? " checked" : "") + '><span><strong>' + esc(dagKort(b.datum)) + "</strong> " + b.tijd + "–" + b.eind + "</span></label></li>").join("") + "</ul>" +
+        (d.voorstel.length < d.aantal ? '<p class="klein te-laat">Er is maar voor ' + d.voorstel.length + " blok" + (d.voorstel.length === 1 ? "" : "ken") + " ruimte vóór die dag.</p>" : "") +
+        '<div class="knoppen eind"><span class="ruimte"></span><button type="button" class="hoofd" data-studie-plan>' + (d.voorstel.filter((b) => b.aan).length || 0) + " blokken inplannen</button></div>"
+        : '<p class="leeg">Geen vrije tijd gevonden vóór die dag. Maak eerst ruimte, of plan zelf een blok.</p>';
+    }
+    studieVenster.innerHTML = h + "</div>";
+  }
+  studieVenster.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const d = studieData;
+    d.aantal = Math.max(1, Math.min(12, parseInt($("studie-aantal").value, 10) || 4));
+    d.duur = +$("studie-duur").value || 90;
+    d.voorstel = studieVoorstel(d.datum, d.aantal, d.duur).map((b) => Object.assign(b, { aan: true }));
+    tekenStudie();
+  });
+  studieVenster.addEventListener("change", (e) => { if (e.target.dataset.studieVink != null && studieData.voorstel) { studieData.voorstel[+e.target.dataset.studieVink].aan = e.target.checked; const k = studieVenster.querySelector("[data-studie-plan]"); if (k) k.textContent = studieData.voorstel.filter((b) => b.aan).length + " blokken inplannen"; } });
+  studieVenster.addEventListener("click", (e) => {
+    if (e.target === studieVenster || e.target.closest("[data-studie-sluit]")) return sluitStudie();
+    if (!e.target.closest("[data-studie-plan]")) return;
+    const d = studieData;
+    const gekozen = (d.voorstel || []).filter((b) => b.aan);
+    if (!gekozen.length) return;
+    const nieuw = gekozen.map((b) => normaal({ id: nieuwId() + Math.random().toString(36).slice(2, 4), titel: ("Studeren: " + d.titel).slice(0, 80), datum: b.datum, tijd: b.tijd, eind: b.eind, soort: "opdracht", agenda: agendaAan("school") ? "school" : instellingen.agendas[0], notitie: "Voor " + d.titel + " op " + dagKort(d.datum), klaar: false }));
+    opdrachten.push(...nieuw);
+    sluitStudie();
+    opslaan(nieuw.map((o) => o.id));
+    const ids = nieuw.map((o) => o.id);
+    toast(nieuw.length + (nieuw.length === 1 ? " studieblok ingepland" : " studieblokken ingepland"), () => { opdrachten = opdrachten.filter((o) => !ids.includes(o.id)); opslaan([], ids); });
+  });
 
   // ---------- start ----------
   if (telefoon()) snel.placeholder = "Typ iets… ‘morgen 14:00 tandarts’";

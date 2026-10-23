@@ -839,3 +839,233 @@ returns void language sql security definer set search_path = '' as $$
 $$;
 revoke all on function kalender.opruimen() from public, anon, authenticated;
 select cron.schedule('digigenda-opruimen', '10 4 * * *', 'select kalender.opruimen();');
+
+-- ---------- Versie 6: agenda's binnenhalen (import via link, bestand of tekst) ----------
+-- Geïmporteerde afspraken krijgen een 'bron' (het id van de import). Bij verversen worden ze bijgewerkt, niet verdubbeld.
+alter table kalender.opdrachten add column if not exists bron text;
+-- geldig = false: de rij hoort niet meer bij de (ververste of verwijderde) import. De app ruimt zulke rijen zelf op
+-- (via kal_verwijder); het nachtelijke opruimen hieronder haalt de rest weg.
+alter table kalender.opdrachten add column if not exists geldig boolean not null default true;
+alter table kalender.opdrachten drop constraint if exists opdrachten_bron_check;
+alter table kalender.opdrachten add constraint opdrachten_bron_check check (bron is null or bron ~ '^[a-z0-9-]{4,40}$');
+create index if not exists opdrachten_bron_idx on kalender.opdrachten (gebruiker_id, bron);
+
+create table if not exists kalender.imports (
+  id text not null check (id ~ '^[a-z0-9-]{4,40}$'),
+  gebruiker_id uuid not null references kalender.gebruikers(id),
+  naam text not null check (length(naam) between 1 and 60),
+  soort text not null check (soort in ('link', 'bestand', 'tekst')),
+  host text,                      -- alleen de domeinnaam, voor weergave
+  url_geheim bytea,               -- de volledige link, versleuteld met de sleutel uit kalender.config
+  agenda text not null default 'werk' check (agenda in ('school', 'werk', 'persoonlijk')),
+  alleen_bezet boolean not null default false,
+  actief boolean not null default true,
+  laatst_ververst timestamptz,
+  laatste_fout text,
+  aantal int not null default 0,
+  gemaakt timestamptz not null default now(),
+  primary key (gebruiker_id, id)
+);
+alter table kalender.imports enable row level security;
+-- Sleutel voor het versleutelen van links (één keer aangemaakt, nooit in de repository)
+insert into kalender.config (sleutel, waarde)
+  select 'import_sleutel', encode(extensions.gen_random_bytes(32), 'hex')
+  where not exists (select 1 from kalender.config where sleutel = 'import_sleutel');
+
+create or replace function kalender.lijst_van(p_gebruiker uuid)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', o.id, 'titel', o.titel, 'datum', to_char(o.datum, 'YYYY-MM-DD'), 'tijd', o.tijd, 'eind', o.eind,
+    'soort', o.soort, 'agenda', o.agenda, 'notitie', o.notitie, 'klaar', o.klaar, 'bron', o.bron)
+    order by o.datum, o.tijd nulls first), '[]'::jsonb)
+  from kalender.opdrachten o where o.gebruiker_id = p_gebruiker and o.geldig;
+$$;
+
+create or replace function public.kal_lijst(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := kalender.gebruiker_van(p_token); n text; i jsonb;
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  select naam, instellingen into n, i from kalender.gebruikers where id = g;
+  perform kalender.zet_klaar(g, n);
+  return jsonb_build_object('ok', true, 'naam', n, 'opdrachten', kalender.lijst_van(g), 'instellingen', i,
+    'opruimen', coalesce((select jsonb_agg(o.id) from (select id from kalender.opdrachten where gebruiker_id = g and not geldig limit 100) o), '[]'::jsonb));
+end $$;
+
+-- Maximum 3000 opdrachten per account (geïmporteerde roosters tellen mee)
+create or replace function kalender.bewaar_een(p_gebruiker uuid, o jsonb)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if (select count(*) from kalender.opdrachten where gebruiker_id = p_gebruiker and geldig) >= 3000 then
+    raise exception 'te_veel';
+  end if;
+  insert into kalender.opdrachten (gebruiker_id, id, titel, datum, tijd, eind, soort, agenda, notitie, klaar, bron, geldig, bijgewerkt)
+  values (p_gebruiker, o->>'id', left(o->>'titel', 80), (o->>'datum')::date,
+          case when o->>'tijd' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' then o->>'tijd' else null end,
+          case when o->>'eind' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' then o->>'eind' else null end,
+          case when o->>'soort' in ('opdracht','deadline','herkansing','toets','afspraak','overig') then o->>'soort' else 'opdracht' end,
+          case when o->>'agenda' in ('school','werk','persoonlijk') then o->>'agenda' else 'school' end,
+          left(coalesce(o->>'notitie',''), 400), coalesce((o->>'klaar')::boolean, false),
+          case when o->>'bron' ~ '^[a-z0-9-]{4,40}$' then o->>'bron' else null end, true, now())
+  on conflict (gebruiker_id, id) do update set
+    titel = excluded.titel, datum = excluded.datum, tijd = excluded.tijd, eind = excluded.eind, soort = excluded.soort,
+    agenda = excluded.agenda, notitie = excluded.notitie, klaar = excluded.klaar, bron = excluded.bron, geldig = true, bijgewerkt = now();
+end $$;
+
+create or replace function kalender.import_naar_json(i kalender.imports)
+returns jsonb language sql immutable set search_path = '' as $$
+  select jsonb_build_object('id', i.id, 'naam', i.naam, 'soort', i.soort, 'host', i.host, 'agenda', i.agenda,
+    'alleenBezet', i.alleen_bezet, 'actief', i.actief, 'laatstVerverst', i.laatst_ververst, 'laatsteFout', i.laatste_fout,
+    'aantal', i.aantal, 'gemaakt', i.gemaakt);
+$$;
+
+-- Lijst van imports (zonder de geheime link)
+create or replace function public.kal_imports_lijst(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := kalender.gebruiker_van(p_token);
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  return jsonb_build_object('ok', true, 'imports', coalesce((select jsonb_agg(kalender.import_naar_json(i) order by i.gemaakt)
+    from kalender.imports i where i.gebruiker_id = g and i.actief), '[]'::jsonb));
+end $$;
+
+-- Import toevoegen of wijzigen. p_import: { id, naam, soort, url?, agenda, alleenBezet }
+create or replace function public.kal_import_bewaar(p_token uuid, p_import jsonb)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := kalender.gebruiker_van(p_token); u text := p_import->>'url'; h text; sl text; nieuw boolean;
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  if coalesce(p_import->>'id', '') !~ '^[a-z0-9-]{4,40}$' or length(trim(coalesce(p_import->>'naam', ''))) = 0
+     or coalesce(p_import->>'soort', '') not in ('link', 'bestand', 'tekst') then
+    return jsonb_build_object('ok', false, 'fout', 'Ongeldige import.');
+  end if;
+  nieuw := not exists (select 1 from kalender.imports where gebruiker_id = g and id = p_import->>'id');
+  if nieuw and (select count(*) from kalender.imports where gebruiker_id = g and actief) >= 10 then
+    return jsonb_build_object('ok', false, 'fout', 'Je kunt maximaal 10 agenda''s binnenhalen. Verwijder er eerst een.');
+  end if;
+  if p_import->>'soort' = 'link' then
+    u := regexp_replace(trim(u), '^webcal://', 'https://', 'i');
+    if u !~ '^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[^ ]*)?$' or length(u) > 2000 then
+      return jsonb_build_object('ok', false, 'fout', 'De link moet met https:// of webcal:// beginnen.');
+    end if;
+    h := lower(regexp_replace(u, '^https://([^/:]+).*$', '\1'));
+    select waarde into sl from kalender.config where sleutel = 'import_sleutel';
+    if sl is null then return jsonb_build_object('ok', false, 'fout', 'De server mist de sleutel voor links.'); end if;
+  end if;
+  insert into kalender.imports (id, gebruiker_id, naam, soort, host, url_geheim, agenda, alleen_bezet, actief)
+  values (p_import->>'id', g, left(trim(p_import->>'naam'), 60), p_import->>'soort', h,
+          case when u is not null then extensions.pgp_sym_encrypt(u, sl) end,
+          case when p_import->>'agenda' in ('school','werk','persoonlijk') then p_import->>'agenda' else 'werk' end,
+          coalesce((p_import->>'alleenBezet')::boolean, false), true)
+  on conflict (gebruiker_id, id) do update set
+    naam = excluded.naam, agenda = excluded.agenda, alleen_bezet = excluded.alleen_bezet, actief = true,
+    host = coalesce(excluded.host, kalender.imports.host), url_geheim = coalesce(excluded.url_geheim, kalender.imports.url_geheim),
+    laatste_fout = null;
+  return jsonb_build_object('ok', true, 'id', p_import->>'id');
+end $$;
+
+-- Hele import verwijderen: de import uit en alle afspraken die eruit kwamen ongeldig (de app ruimt ze daarna op)
+create or replace function public.kal_import_verwijder(p_token uuid, p_id text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := kalender.gebruiker_van(p_token); n int;
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  update kalender.opdrachten set geldig = false, bijgewerkt = now() where gebruiker_id = g and bron = p_id and geldig;
+  get diagnostics n = row_count;
+  update kalender.imports set actief = false, url_geheim = null where gebruiker_id = g and id = p_id;
+  return jsonb_build_object('ok', true, 'verwijderd', n,
+    'opruimen', coalesce((select jsonb_agg(id) from kalender.opdrachten where gebruiker_id = g and bron = p_id), '[]'::jsonb));
+end $$;
+
+-- Alleen voor de serverfunctie: link en instellingen van één import (controleert het inlogbewijs als dat is meegegeven)
+create or replace function public.kal_import_ophalen(p_id text, p_gebruiker uuid default null, p_token uuid default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := coalesce(p_gebruiker, kalender.gebruiker_van(p_token)); i kalender.imports%rowtype; sl text; u text;
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  select * into i from kalender.imports where gebruiker_id = g and id = p_id and actief;
+  if not found then return jsonb_build_object('ok', false, 'fout', 'Import niet gevonden.'); end if;
+  if i.url_geheim is not null then
+    select waarde into sl from kalender.config where sleutel = 'import_sleutel';
+    u := extensions.pgp_sym_decrypt(i.url_geheim, sl);
+  end if;
+  return jsonb_build_object('ok', true, 'gebruiker', g, 'import', kalender.import_naar_json(i), 'url', u);
+end $$;
+
+-- Alleen voor de serverfunctie: welke link-imports zijn aan verversing toe? (ouder dan 50 minuten)
+create or replace function public.kal_imports_te_verversen()
+returns jsonb language sql security definer set search_path = '' as $$
+  select coalesce(jsonb_agg(jsonb_build_object('gebruiker', gebruiker_id, 'id', id)), '[]'::jsonb)
+  from kalender.imports
+  where actief and soort = 'link' and (laatst_ververst is null or laatst_ververst < now() - interval '50 minutes')
+    and exists (select 1 from kalender.sessies s where s.gebruiker_id = kalender.imports.gebruiker_id and s.verloopt > now());
+$$;
+
+-- Alleen voor de serverfunctie: de afspraken van een import vervangen door de nieuwe lijst (bijwerken, niet verdubbelen)
+create or replace function public.kal_import_vervang(p_gebruiker uuid, p_id text, p_items jsonb, p_fout text default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare o jsonb; n int := 0; ids text[] := '{}';
+begin
+  if p_fout is not null then
+    update kalender.imports set laatste_fout = left(p_fout, 200), laatst_ververst = now() where gebruiker_id = p_gebruiker and id = p_id;
+    return jsonb_build_object('ok', true);
+  end if;
+  if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) > 1500 then
+    return jsonb_build_object('ok', false, 'fout', 'Te veel afspraken (maximaal 1500 per import).');
+  end if;
+  for o in select * from jsonb_array_elements(p_items) loop
+    perform kalender.bewaar_een(p_gebruiker, o || jsonb_build_object('bron', p_id));
+    ids := ids || (o->>'id');
+    n := n + 1;
+  end loop;
+  update kalender.opdrachten set geldig = false, bijgewerkt = now() where gebruiker_id = p_gebruiker and bron = p_id and geldig and not (id = any(ids));
+  update kalender.imports set laatste_fout = null, laatst_ververst = now(), aantal = n where gebruiker_id = p_gebruiker and id = p_id;
+  return jsonb_build_object('ok', true, 'aantal', n);
+exception when others then
+  update kalender.imports set laatste_fout = case when sqlerrm = 'te_veel' then 'Het maximum van 3000 opdrachten is bereikt.' else 'Opslaan is niet gelukt.' end,
+    laatst_ververst = now() where gebruiker_id = p_gebruiker and id = p_id;
+  return jsonb_build_object('ok', false, 'fout', case when sqlerrm = 'te_veel' then 'Het maximum van 3000 opdrachten is bereikt.' else 'Opslaan is niet gelukt.' end);
+end $$;
+
+-- Alleen voor de serverfunctie: hoogstens 12 keer per uur een link ophalen per account (tegen misbruik van de proxy)
+create or replace function public.kal_import_toestemming(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare g uuid := kalender.gebruiker_van(p_token); n int := 0; sl text;
+begin
+  if g is null then return jsonb_build_object('ok', false, 'sessie', false); end if;
+  sl := 'imp:' || to_char(now() at time zone 'UTC', 'YYYYMMDDHH24');
+  select count(*) into n from kalender.meldingen_gestuurd where gebruiker_id = g and sleutel like sl || ':%';
+  if n >= 12 then return jsonb_build_object('ok', false, 'fout', 'Je hebt dit uur al vaak een link opgehaald. Probeer het later opnieuw.'); end if;
+  insert into kalender.meldingen_gestuurd (gebruiker_id, sleutel) values (g, sl || ':' || (n + 1)) on conflict do nothing;
+  return jsonb_build_object('ok', true, 'gebruiker', g);
+end $$;
+
+revoke all on all functions in schema kalender from public, anon, authenticated;
+revoke all on function public.kal_imports_lijst(uuid), public.kal_import_bewaar(uuid, jsonb), public.kal_import_verwijder(uuid, text),
+  public.kal_import_ophalen(text, uuid, uuid), public.kal_imports_te_verversen(), public.kal_import_vervang(uuid, text, jsonb, text),
+  public.kal_import_toestemming(uuid) from public, anon, authenticated;
+grant execute on function public.kal_imports_lijst(uuid), public.kal_import_bewaar(uuid, jsonb), public.kal_import_verwijder(uuid, text) to anon;
+grant execute on function public.kal_import_ophalen(text, uuid, uuid), public.kal_imports_te_verversen(), public.kal_import_vervang(uuid, text, jsonb, text),
+  public.kal_import_toestemming(uuid) to service_role;
+
+-- Planner: elk uur de link-imports verversen (de serverfunctie doet de SSRF-controle en het lezen van de .ics)
+select cron.schedule('digigenda-imports', '7 * * * *', $job$
+  select net.http_post(
+    url := 'https://srfigofpluibrrgcefuq.supabase.co/functions/v1/digigenda-import',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+      'x-digigenda-geheim', (select waarde from kalender.config where sleutel = 'meldingen_geheim')),
+    body := '{"cron":true}'::jsonb,
+    timeout_milliseconds := 120000)
+  where exists (select 1 from kalender.imports where actief and soort = 'link');
+$job$);
+
+-- ---------- Versie 6b: opruimen van ongeldige rijen (ZELF UITVOEREN in de SQL-editor) ----------
+-- De beheerconnector vraagt bij DELETE om een bevestiging; daarom is dit blok niet automatisch uitgevoerd.
+-- De app werkt ook zonder: ongeldige rijen worden via kal_verwijder opgeruimd. Dit blok maakt het nachtelijke opruimen volledig.
+create or replace function kalender.opruimen()
+returns void language sql security definer set search_path = '' as $$
+  delete from kalender.meldingen_gestuurd where gestuurd < now() - interval '14 days';
+  delete from kalender.opdrachten where not geldig and bijgewerkt < now() - interval '7 days';
+  delete from kalender.imports where not actief and gemaakt < now() - interval '30 days';
+$$;
+revoke all on function kalender.opruimen() from public, anon, authenticated;

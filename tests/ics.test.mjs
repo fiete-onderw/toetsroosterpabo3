@@ -10,4 +10,4 @@ const ok = (naam, v) => console.log((v ? "OK  " : "FOUT") + " " + naam);
 ok("DTEND bij eindtijd", r.includes("DTEND;TZID=Europe/Amsterdam:20261102T113000"));
 ok("DURATION zonder eindtijd", ics.split("UID:b-")[1].split("END:VEVENT")[0].includes("DURATION:PT1H"));
 ok("hele dag + (tot 17:00)", r.includes("SUMMARY:Inleveren (tot 17:00)") && ics.split("UID:c-")[1].split("END:VEVENT")[0].includes("DTSTART;VALUE=DATE:20261103"));
-ok("eind voor begin -> 1 uur", ics.split("UID:d-")[1].split("END:VEVENT")[0].includes("DURATION:PT1H"));
+ok("eind voor begin = nachtdienst, eindigt de volgende dag", ics.split("UID:d-")[1].split("END:VEVENT")[0].includes("DTEND;TZID=Europe/Amsterdam:20261104T140000"));

@@ -159,9 +159,11 @@ const check = (naam, ok, extra) => res.push((ok ? "PASS " : "FAIL ") + naam + (e
   await page.fill("#f-titel", "Portfolio afmaken");
   await page.fill("#f-tijd", "15:00");
   check("venster: 'Afgerond' verdwijnt bij een begintijd", !(await page.locator("#f-klaar-rij").isVisible()));
-  await page.fill("#f-eind", "14:00");
+  await page.fill("#f-eind", "14:00"); await page.dispatchEvent("#f-eind", "input");
+  check("venster: eindtijd vóór begintijd = volgende ochtend (nachtdienst)", (await txt("#f-uitleg")).includes("volgende ochtend om 14:00"), await txt("#f-uitleg"));
+  await page.fill("#f-eind", "15:00"); await page.dispatchEvent("#f-eind", "input");
   await page.click("#formulier button[type=submit]"); await w(100);
-  check("venster: eindtijd vóór begintijd geweigerd", (await txt("#f-fout")).includes("eindtijd moet na"), await txt("#f-fout"));
+  check("venster: eindtijd gelijk aan begintijd geweigerd", (await txt("#f-fout")).includes("gelijk aan de begintijd"), await txt("#f-fout"));
   await page.fill("#f-tijd", "");
   await page.dispatchEvent("#f-tijd", "input");
   await page.fill("#f-eind", "17:00");

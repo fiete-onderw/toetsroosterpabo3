@@ -28,6 +28,7 @@ const INST = { agendas: ["school", "werk", "persoonlijk"], pabo: true, doelgroep
     await ctx.route("https://fonts.**", (r) => r.abort());
     await ctx.addInitScript(([d, i]) => { if (!localStorage.getItem("gezaaid")) { localStorage.setItem("pabo3-kalender-opdrachten-v1", JSON.stringify(d)); localStorage.setItem("digigenda-instellingen-v1", JSON.stringify(i)); localStorage.setItem("gezaaid", "1"); } }, [DATA, INST]);
     const page = await ctx.newPage();
+    await page.emulateMedia({ reducedMotion: "reduce" });   // vaste klok bevriest CSS-animaties
     await page.clock.setFixedTime(NU);
     page.on("pageerror", (e) => fouten.push(viewport.width + ": " + e.message));
     page.on("console", (m) => { if (m.type() === "error" && !/fonts|net::|Failed to load resource/.test(m.text())) fouten.push(m.text()); });
@@ -36,9 +37,9 @@ const INST = { agendas: ["school", "werk", "persoonlijk"], pabo: true, doelgroep
   }
   const tel = await maak({ width: 390, height: 844 });
   await tel.screenshot({ path: OUT + "/t1-vandaag.png", fullPage: true });
-  await tel.click('[data-modus="week"]'); await tel.waitForTimeout(200);
+  await tel.click('[data-onder="week"]'); await tel.waitForTimeout(200);
   await tel.screenshot({ path: OUT + "/t2-week.png", fullPage: true });
-  await tel.click('[data-weekend="1"]'); await tel.waitForTimeout(200);
+  await tel.waitForTimeout(50);
   await tel.screenshot({ path: OUT + "/t3-weekend.png", fullPage: true });
   await tel.click('[data-onder="maand"]'); await tel.waitForTimeout(200);
   await tel.screenshot({ path: OUT + "/t4-maand.png", fullPage: true });
@@ -46,7 +47,7 @@ const INST = { agendas: ["school", "werk", "persoonlijk"], pabo: true, doelgroep
   await tel.screenshot({ path: OUT + "/t5-dag-na-maandklik.png", fullPage: true });
   await tel.click('[data-onder="lijst"]'); await tel.waitForTimeout(200);
   await tel.screenshot({ path: OUT + "/t6-lijst.png", fullPage: true });
-  await tel.click('[data-onder="vandaag"]'); await tel.waitForTimeout(200);
+  await tel.click('[data-onder="dag"]'); await tel.waitForTimeout(200);
   await tel.click('.uurvak[data-slot="2026-10-22|16:00"]'); await tel.waitForTimeout(200);
   await tel.screenshot({ path: OUT + "/t7-nieuw-uit-uur.png" });
   await tel.click("#f-annuleer"); await tel.waitForTimeout(100);

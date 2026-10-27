@@ -38,7 +38,7 @@ const res = []; const check = (n, ok, x) => res.push((ok ? "PASS " : "FAIL ") + 
 
   // ---- telefoon: dagstart, gaten, plan in via menu ----
   const t = await maak({ width: 390, height: 844 });
-  check("dagstart: kaart met to-do's van eerder (2)", await t.locator(".dagstart").isVisible() && (await t.locator(".dagstart").innerText()).includes("Nog open van eerder · 2") && (await t.locator(".dagstart .ds-rij").count()) === 2);
+  check("dagstart: kaart met to-do's van eerder (2)", await t.locator(".dagstart").isVisible() && (await t.locator(".dagstart").textContent()).includes("Nog open van eerder · 2") && (await t.locator(".dagstart .ds-rij").count()) === 2);
   check("dagstart: de to-do-lijst toont ze niet dubbel", (await t.locator('.dag-todo .rij[data-id="t3"]').count()) === 0);
   await t.screenshot({ path: path.join(OUT, "m1-dagstart.png"), fullPage: true });
   await t.click('[data-ds="later"][data-id="t4"]'); await w(t, 200);
@@ -64,7 +64,7 @@ const res = []; const check = (n, ok, x) => res.push((ok ? "PASS " : "FAIL ") + 
   check("plan in: toast met Aanpassen en Ongedaan maken", (await t.locator("#toast").innerText()).includes("Ingepland") && await t.locator("#toastExtra").isVisible() && await t.locator("#toastOngedaan").isVisible());
   await t.screenshot({ path: path.join(OUT, "m2-planin.png"), fullPage: true });
   await t.click("#toastExtra"); await w(t, 150);
-  check("toast 'Aanpassen' opent het venster van het item", (await t.locator("#venstertitel").innerText()) === "Afspraak wijzigen" && (await t.inputValue("#f-tijd")) === "14:30");
+  check("toast 'Aanpassen' opent het venster van het item", (await t.locator("#venstertitel").innerText()) === "Wijzigen" && (await t.inputValue("#f-tijd")) === "14:30");
   await t.click("#f-annuleer");
   const gaten2 = await t.locator(".dagraster .gat").allInnerTexts();
   check("gaten: na inplannen begint het gat om 15:30", gaten2.length === 1 && gaten2[0].includes("15:30–18:00"), gaten2);

@@ -6,7 +6,7 @@
     opent met ?gedeeld=1.
   Verhoog VERSIE bij elke oplevering.
 */
-const VERSIE = "digigenda-20261023b";
+const VERSIE = "digigenda-20261027b";
 const BESTANDEN = [
   "./", "index.html", "style.css", "app.js", "parse.js", "ics.js", "cloud.js", "toetsen.js", "manifest.webmanifest",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"

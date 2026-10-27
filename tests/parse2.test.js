@@ -23,7 +23,7 @@ const g = [
   ["werk 22:00-06:00 za", "werk", "2026-10-24", "22:00", "06:00"],
   ["9-12 inleveren", "inleveren", "2026-12-09", null, null],
   ["tot ziens zeggen morgen", "tot ziens zeggen", "2026-10-23", null, null],
-  ["college 9 uur vrijdag", "college", "2026-10-23", "09:00", null],
+  ["college 9 uur vrijdag", "college", "2026-10-23", "09:00", "10:30"],   // standaardduur college: 1,5 uur
 ];
 let f = 0;
 for (const [inv, titel, datum, tijd, eind] of g) {

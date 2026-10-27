@@ -1,19 +1,20 @@
 /* Digigenda. Opbouw: kop, snelle invoer, weergavekeuze; maand met zijpaneel, of week/dag/opdrachten over de volle breedte. */
 :root {
-  --bg: #f6efec;          /* zachte blush-ondergrond */
-  --kaart: #ffffff;
-  --fg: #22283a;
-  --muted: #6a6f80;
-  --lijn: #ecd9d2;
-  --kopregel: #f4dcd4;    /* rij met dagnamen */
-  --zacht: #faf4f1;       /* weekend / buiten de maand */
-  --accent: #2f5d8a;      /* hoofdkleur: knoppen, vandaag */
+  /* Papier en inkt: warm papier, donkere inkt, dunne lijnen. Zie docs/ontwerp.md */
+  --bg: #f5f1ec;          /* papier */
+  --kaart: #fffdfb;       /* Nu-kaart, dialogen, raster */
+  --fg: #1c2030;          /* inkt */
+  --muted: #5f6575;       /* bijschriften en labels (4,8:1 op de lichtste vlakken) */
+  --lijn: #e4ddd7;        /* hairlines */
+  --kopregel: #efe9e4;    /* rij met dagnamen, tellers */
+  --zacht: #efe9e4;       /* weekend / buiten de maand / aanwijzen */
+  --accent: #2b5a86;      /* hoofdkleur: knoppen, vandaag */
   --accent-fg: #ffffff;
 
   /* soorten */
   --lkt: #c8432a;
-  --toets: #2f5d8a;
-  --periode: #22283a;
+  --toets: #2b5a86;
+  --periode: #1c2030;
   --vakantie: #b9b2b5;
   --opdracht: #2f7d5b;
   --deadline: #7a4fb0;
@@ -21,24 +22,28 @@
   --overig: #5b6577;
 
   /* agenda's */
-  --ag-school: #2f5d8a;
+  --ag-school: #2b5a86;
   --ag-werk: #0f766e;
   --ag-persoonlijk: #a23b72;
 
+  /* ruimte en vorm */
+  --r-klein: 6px; --r-knop: 10px; --r-kaart: 16px;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #15171e; --kaart: #1d212b; --fg: #eceef3; --muted: #9ba1b0; --lijn: #313645;
-    --kopregel: #2a2f3c; --zacht: #191c24; --accent: #7fb0e0; --accent-fg: #10141b;
-    --lkt: #f0806a; --toets: #7fb0e0; --periode: #eceef3; --vakantie: #4a4f5c;
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) { --bg: #14161c; --kaart: #1b1e26; --fg: #eceef2; --muted: #9aa0ae; --lijn: #2c303b;
+    --kopregel: #262a34; --zacht: #181b22; --accent: #8ab6e4; --accent-fg: #0f141b;
+    --lkt: #f0806a; --toets: #8ab6e4; --periode: #eceef2; --vakantie: #4a4f5c;
     --opdracht: #6cc79c; --deadline: #b996ea; --herkansing: #e6b05a; --overig: #a4adbd;
-    --ag-school: #7fb0e0; --ag-werk: #4fc1b0; --ag-persoonlijk: #e58ab8;
-    color-scheme: dark;
-  }
-}
+    --ag-school: #8ab6e4; --ag-werk: #4fc1b0; --ag-persoonlijk: #e58ab8;
+    color-scheme: dark; } }
+:root[data-thema="donker"] { --bg: #14161c; --kaart: #1b1e26; --fg: #eceef2; --muted: #9aa0ae; --lijn: #2c303b;
+    --kopregel: #262a34; --zacht: #181b22; --accent: #8ab6e4; --accent-fg: #0f141b;
+    --lkt: #f0806a; --toets: #8ab6e4; --periode: #eceef2; --vakantie: #4a4f5c;
+    --opdracht: #6cc79c; --deadline: #b996ea; --herkansing: #e6b05a; --overig: #a4adbd;
+    --ag-school: #8ab6e4; --ag-werk: #4fc1b0; --ag-persoonlijk: #e58ab8;
+    color-scheme: dark; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -102,7 +107,7 @@ button { cursor: pointer; }
 .dag:hover { background: var(--zacht); }
 .dag.weekend { background: var(--zacht); }
 .dag.buiten { opacity: 0.45; }
-.dag.vakantie { background-image: repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--vakantie) 30%, transparent) 7px 9px); }
+.dag.vakantie { background-image: repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--vakantie) 22%, transparent) 7px 9px); }
 .dag.gekozen { box-shadow: inset 0 0 0 2px var(--accent); }
 .nr { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; font-size: 13px; font-weight: 700; background: var(--kopregel); }
 .dag.vandaag .nr { background: var(--accent); color: var(--accent-fg); }
@@ -113,7 +118,8 @@ button { cursor: pointer; }
 .chip.eigen { background: transparent; color: var(--fg); border-left: 3px solid var(--c); border-radius: 2px; padding-left: 4px; font-weight: 400; }
 .chip.eigen.klaar span { text-decoration: line-through; color: var(--muted); }
 .chip.vast { background: var(--c); }
-@media (prefers-color-scheme: dark) { .chip.vast { color: #10141b; } }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) .chip.vast { color: #10141b; } }
+:root[data-thema="donker"] .chip.vast { color: #10141b; }
 .chip .slot { flex: none; width: 9px; height: 9px; }
 .meer { font-size: 11px; color: var(--muted); }
 
@@ -148,7 +154,8 @@ button { cursor: pointer; }
 .item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--lijn); }
 .item:first-child { border-top: 0; padding-top: 2px; }
 .datumblok { width: 46px; border-radius: 6px; background: var(--c); color: #fff; text-align: center; font-family: var(--display); line-height: 1.05; padding: 5px 0; }
-@media (prefers-color-scheme: dark) { .datumblok { color: #10141b; } }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) .datumblok { color: #10141b; } }
+:root[data-thema="donker"] .datumblok { color: #10141b; }
 .datumblok b { display: block; font-size: 1.15rem; font-weight: 800; }
 .datumblok small { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
 .streep { width: 4px; align-self: stretch; border-radius: 2px; background: var(--c); }
@@ -268,7 +275,8 @@ dialog input[type="text"], dialog input[type="date"], dialog select, dialog text
 .rij-acties { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
 .rij.vast .vast-blok { width: 26px; height: 26px; border-radius: 8px; background: var(--c); color: #fff; display: grid; place-items: center; }
 .rij.vast .vast-blok .slot { width: 11px; height: 11px; }
-@media (prefers-color-scheme: dark) { .rij.klaar .vink, .rij.vast .vast-blok { color: #10141b; } }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) .rij.klaar .vink, :root:not([data-thema="licht"]) .rij.vast .vast-blok { color: #10141b; } }
+:root[data-thema="donker"] .rij.klaar .vink, :root[data-thema="donker"] .rij.vast .vast-blok { color: #10141b; }
 @media (max-width: 640px) {
   .rij { grid-template-columns: auto minmax(0, 1fr); }
   .rij-acties { grid-column: 2; justify-content: flex-start; }
@@ -350,8 +358,9 @@ body.geen-scroll { overflow: hidden; }
 .vink-label input { margin-top: 3px; }
 
 /* ================= Vandaag, tijdblokken en onderbalk ================= */
-:root { --nu: #d93a2b; }
-@media (prefers-color-scheme: dark) { :root { --nu: #ff6b5b; } }
+:root { --nu: #c9311f; }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) { --nu: #ff6b5b; } }
+:root[data-thema="donker"] { --nu: #ff6b5b; }
 
 /* Rijen: to-do's hebben een vinkje, blokken een tijdstip */
 .rij { grid-template-columns: 44px minmax(0, 1fr) auto; }
@@ -451,12 +460,13 @@ body.geen-scroll { overflow: hidden; }
 .wk-heledag { border-bottom: 1px solid var(--lijn); background: var(--zacht); }
 .wk-hoek { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); text-align: right; padding: 6px 6px 0 0; }
 .hd-cel { border-left: 1px solid var(--lijn); padding: 4px 3px; display: flex; flex-direction: column; gap: 3px; min-height: 30px; min-width: 0; }
-.hd-cel.vakantie { background-image: repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--vakantie) 30%, transparent) 7px 9px); }
+.hd-cel.vakantie { background-image: repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--vakantie) 22%, transparent) 7px 9px); }
 .hd-chip { display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; text-align: left; border: 0; border-left: 3px solid var(--c); border-radius: 4px; padding: 2px 5px;
   font-size: 11.5px; font-weight: 700; line-height: 1.3; color: var(--fg); background: color-mix(in srgb, var(--c) 14%, var(--kaart)); }
 .hd-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hd-chip.vast { background: var(--c); color: #fff; }
-@media (prefers-color-scheme: dark) { .hd-chip.vast { color: #10141b; } }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) .hd-chip.vast { color: #10141b; } }
+:root[data-thema="donker"] .hd-chip.vast { color: #10141b; }
 .hd-chip .slot { width: 9px; height: 9px; flex: none; }
 .hd-chip.klaar span { text-decoration: line-through; color: var(--muted); }
 .hd-meer { border: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; padding: 1px 4px; text-align: left; }
@@ -517,8 +527,9 @@ body.geen-scroll { overflow: hidden; }
 
 /* ================= Rust: één vraag per scherm ('wat nu?') ================= */
 /* Zachte achtergrond die meeloopt met het dagdeel */
-:root { --bg-ochtend: #f8f1e8; --bg-middag: #f6efec; --bg-avond: #f1eef5; --bg-nacht: #eceef4; }
-@media (prefers-color-scheme: dark) { :root { --bg-ochtend: #17171d; --bg-middag: #15171e; --bg-avond: #151526; --bg-nacht: #11131b; } }
+:root { --bg-ochtend: #f7f2ea; --bg-middag: #f5f1ec; --bg-avond: #f1eff3; --bg-nacht: #edeef2; }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) { --bg-ochtend: #16161b; --bg-middag: #14161c; --bg-avond: #141523; --bg-nacht: #101218; } }
+:root[data-thema="donker"] { --bg-ochtend: #16161b; --bg-middag: #14161c; --bg-avond: #141523; --bg-nacht: #101218; }
 html[data-dagdeel="ochtend"] { --bg: var(--bg-ochtend); }
 html[data-dagdeel="middag"] { --bg: var(--bg-middag); }
 html[data-dagdeel="avond"] { --bg: var(--bg-avond); }
@@ -527,7 +538,8 @@ html[data-dagdeel="nacht"] { --bg: var(--bg-nacht); }
 
 /* Minder randen: vlakken onderscheiden met licht, niet met lijnen */
 .kalender, .paneel, .snel-form, .melding-balk { border-color: transparent; box-shadow: 0 1px 2px rgba(34, 40, 58, 0.05), 0 0 0 1px rgba(34, 40, 58, 0.04); }
-@media (prefers-color-scheme: dark) { .kalender, .paneel, .snel-form, .melding-balk { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); } }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) .kalender, :root:not([data-thema="licht"]) .paneel, :root:not([data-thema="licht"]) .snel-form, :root:not([data-thema="licht"]) .melding-balk { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); } }
+:root[data-thema="donker"] .kalender, :root[data-thema="donker"] .paneel, :root[data-thema="donker"] .snel-form, :root[data-thema="donker"] .melding-balk { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
 .kop-groet { display: none; }
 .ak-rond { display: none; }
 .snel-form .hoofd .kort { display: none; }
@@ -659,9 +671,8 @@ dialog.actieblad::backdrop { background: rgba(20, 22, 30, 0.35); }
   .dagindeling { gap: 22px; }
   .nu-titel { font-size: 1.3rem; }
 }
-@media (prefers-color-scheme: dark) and (max-width: 640px) {
-  .snel-form, .snel-voorbeeld.zichtbaar { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); }
-}
+@media (prefers-color-scheme: dark) and (max-width: 640px) { :root:not([data-thema="licht"]) .snel-form, :root:not([data-thema="licht"]) .snel-voorbeeld.zichtbaar { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); } }
+@media (max-width: 640px) { :root[data-thema="donker"] .snel-form, :root[data-thema="donker"] .snel-voorbeeld.zichtbaar { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); } }
 /* Lange woorden zonder spaties mogen nooit het scherm breder maken */
 .nu-regel, .nu-rest, .snel-voorbeeld, .toast span, .hero-tekst, .melding-balk p, .acc-melding, .rij-meta, .rij-notitie, .leeg, .inst-blok p, .f-uitleg, .fout { overflow-wrap: anywhere; }
 /* Bijwerkingen na de eerste schermafbeeldingen */
@@ -747,3 +758,259 @@ dialog.alleen-lezen input:disabled, dialog.alleen-lezen select:disabled, dialog.
 /* Face ID: keuze wanneer opnieuw ontgrendelen */
 .vergrendel-keuze { margin-top: 6px; gap: 10px; }
 .vergrendel-keuze select { border: 1px solid var(--lijn); border-radius: 8px; padding: 6px 8px; background: var(--bg); font-size: 14px; }
+
+/* ================= Papier en inkt (ontwerpronde, zie docs/ontwerp.md) ================= */
+/* Typografie: koppen en knoppen in de displayletter, lopende tekst licht, één labelstijl */
+.hoofd, .zacht, .gevaar, .knop-label, .mini, .tabs button, .doelgroep button, .modus button, .filter, .terugknop, .tekstknop, .toon-meer, .nieuwe-rij,
+.actieblad-knoppen button, .onderbalk button, .jaarstrook .m, .ws-pijl, .wk-dag .nr, .weekendstrook .ws-titel { font-family: var(--display); font-weight: 600; }
+.hoofd, .zacht, .gevaar, .knop-label { border-radius: var(--r-knop); padding: 8px 15px; }
+.mini { border-radius: 8px; font-weight: 600; }
+.sectie-label, .sectie-kop .sectie-label, .groep-kop, .label, .dagnaam, .ws-d, .wk-dag .wd, .wk-hoek, .blok-soort, .tijdstip.heledag, .datumblok small, .tag, .nu-label {
+  font-family: var(--body); font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.hero-groet, .kop-groet { font-family: var(--display); font-weight: 600; font-size: 14px; color: var(--muted); }
+.hero-titel { font-size: clamp(1.75rem, 3.2vw, 2.4rem); letter-spacing: -0.02em; font-weight: 800; }
+.hero-tekst { font-size: 14.5px; }
+.rij-titel { font-weight: 400; font-size: 15.5px; }
+.rij.vast .rij-titel, .rij.klaar .rij-titel { font-weight: 400; }
+.rij.vast .rij-titel { font-weight: 700; }
+.nu-titel { font-weight: 700; letter-spacing: -0.01em; }
+.hd-chip, .chip { font-weight: 600; }
+.blok-titel { font-weight: 700; }
+.item h4 { font-weight: 700; }
+.dagkop h3 { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.01em; }
+.groep h3 { font-size: 1.1rem; font-weight: 700; }
+.groep-titel { border-bottom-width: 1px; padding-bottom: 6px; }
+.aantal { font-weight: 400; }
+dialog h3, .welkom-kaart h2, .inst-blok h4, .imp-route h4, .imp-voorbeeld h4 { font-weight: 700; letter-spacing: -0.01em; }
+.welkom-kaart h2 { font-size: 1.5rem; }
+.inst-blok h4, .imp-route h4, .imp-voorbeeld h4 { font-size: 1.02rem; }
+
+/* Datumkop: de dag staat op het papier, met een dunne lijn eronder */
+.hero { margin: 4px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--lijn); }
+.hero-sub { margin-top: 2px; }
+body[data-scherm="dag"] .hero { border-bottom: 0; padding-bottom: 0; margin-bottom: 8px; }
+.weekstrip { border-bottom: 1px solid var(--lijn); padding-bottom: 10px; margin-bottom: 18px; }
+
+/* Vorm en diepte: hoeken uit één reeks, geen schaduw op het papier */
+dialog { border-radius: var(--r-kaart); }
+dialog form { padding: 20px; gap: 6px; }
+dialog input[type="text"], dialog input[type="date"], dialog input[type="time"], dialog select, dialog textarea, .acc-form input,
+.imp-form input[type="url"], .imp-form input[type="text"], .imp-form select, .imp-form textarea, .studie-inhoud input[type="number"], .studie-inhoud select, .vergrendel-keuze select { border-radius: var(--r-knop); }
+dialog input:focus-visible, dialog select:focus-visible, dialog textarea:focus-visible, .acc-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.nu-binnen { border-radius: var(--r-kaart); }
+.welkom-kaart { border-radius: 20px; }
+.kalender, .paneel, .snel-form, .melding-balk { box-shadow: none; }
+.kalender, .paneel { border: 1px solid var(--lijn); }
+.melding-balk { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); border: 0; border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; }
+.toast { border-radius: 12px; }
+.voet { font-size: 12px; padding-top: 12px; border-top: 1px solid var(--lijn); }
+body[data-scherm="dag"] .voet, body[data-scherm="week"] .voet { display: none; }
+
+/* Maand: raster als één vlak met dunne lijnen, dagnamen als labels, geen gekleurde band */
+.balk { margin-bottom: 14px; }
+.balk h2 { font-size: clamp(1.5rem, 3vw, 2.1rem); letter-spacing: -0.02em; }
+.grid-scroll { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--lijn); border-radius: 12px; background: var(--kaart); }
+.grid { border: 0; margin: 0 -1px -1px 0; }
+.dagnaam { background: transparent; padding: 9px 0 7px; font-size: 11px; }
+.wk { background: transparent; padding-top: 9px; }
+.dag { padding: 5px 5px 6px; }
+.nr { background: transparent; width: 26px; height: 26px; border-radius: 50%; font-weight: 600; font-family: var(--display); font-size: 13.5px; }
+.dag:hover .nr { background: var(--kopregel); }
+.dag.vandaag .nr { background: var(--accent); color: var(--accent-fg); }
+.dag.weekend { background: color-mix(in srgb, var(--zacht) 60%, var(--kaart)); }
+.dag.buiten { opacity: 0.4; }
+.legenda { margin-top: 10px; font-size: 12px; }
+.jaarstrook { gap: 0; border-bottom: 1px solid var(--lijn); }
+.jaarstrook button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 6px 2px 8px; margin-bottom: -1px; }
+.jaarstrook button:hover { background: var(--zacht); }
+.jaarstrook button[aria-current="true"] { border-bottom-color: var(--accent); box-shadow: none; }
+.jaarstrook button[aria-current="true"] .m { color: var(--accent); }
+.jaarstrook .m { font-weight: 600; }
+
+/* Tabbladen en keuzes: één lichte baan met een wit gekozen vlak */
+.tabs, .doelgroep, .modus { background: var(--zacht); border-color: transparent; }
+.tabs button[aria-selected="true"], .doelgroep button[aria-pressed="true"], .modus button[aria-pressed="true"] { background: var(--kaart); color: var(--fg); box-shadow: 0 1px 2px rgba(28, 32, 48, 0.14); }
+.filter { background: transparent; }
+.filter[aria-pressed="true"] { border-color: color-mix(in srgb, var(--c) 50%, transparent); }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) .tabs button[aria-selected="true"], :root:not([data-thema="licht"]) .doelgroep button[aria-pressed="true"], :root:not([data-thema="licht"]) .modus button[aria-pressed="true"] { background: color-mix(in srgb, var(--fg) 14%, transparent); box-shadow: none; } }
+:root[data-thema="donker"] .tabs button[aria-selected="true"], :root[data-thema="donker"] .doelgroep button[aria-pressed="true"], :root[data-thema="donker"] .modus button[aria-pressed="true"] { background: color-mix(in srgb, var(--fg) 14%, transparent); box-shadow: none; }
+
+/* Beweging: een nieuw scherm verschijnt kort, de rest staat stil */
+@media (prefers-reduced-motion: no-preference) {
+  #hoofd > .hero { animation: verschijn 0.16s ease-out both; }
+  .tabs button, .filter, .jaarstrook button, .ws, .wk-dag, .rij-tekst, .hoofd, .zacht, .mini { transition: background-color 0.12s, border-color 0.12s, color 0.12s; }
+}
+@keyframes verschijn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Tablet en laptop: kop op één regel, typregel, inhoud direct op het papier ---------- */
+@media (min-width: 641px) {
+  .wrap { gap: 18px; padding-block: 14px 56px; }
+  .kop { flex-wrap: wrap; align-items: center; gap: 10px 18px; padding-bottom: 12px; border-bottom: 1px solid var(--lijn); }
+  .merk { gap: 10px; }
+  .merk img { width: 30px; height: 30px; border-radius: 8px; }
+  .merk-tekst { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .merk h1 { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
+  .merk .sub { font-size: 12.5px; }
+  .kop .weergave-balk { flex: 1 1 auto; justify-content: center; gap: 8px 16px; }
+  .kop-acties { margin-left: auto; }
+  .tandwiel { border-color: transparent; background: transparent; }
+  .tandwiel:hover { background: var(--zacht); }
+  #accountKnop { background: transparent; }
+
+  /* Typregel: een lijn op het papier, geen kaart */
+  .snel { max-width: 880px; }
+  .snel-form { background: transparent; border: 0; border-bottom: 1.5px solid var(--lijn); border-radius: 0; padding: 2px 0 8px; gap: 10px; align-items: center; }
+  .snel-form:focus-within { border-bottom-color: var(--accent); box-shadow: none; }
+  #snelAgenda { height: 34px; border-radius: 999px; border: 1px solid var(--lijn); border-left: 4px solid var(--c); background: var(--kaart); padding: 4px 10px; font-size: 13px; font-family: var(--display); font-weight: 600; }
+  #snelInvoer { padding: 6px 2px; min-height: 34px; }
+  .snel-form .hoofd { height: 34px; padding: 0 16px; border-radius: 999px; }
+  .snel-voorbeeld.zichtbaar { margin-top: 8px; }
+
+  /* Inhoud zonder kaart; het zijpaneel staat achter een lijn */
+  .kalender { background: transparent; border: 0; padding: 0; }
+  .layout { gap: 28px; }
+  .zij { border-top: 1px solid var(--lijn); padding-top: 20px; gap: 26px; }
+  .paneel { background: transparent; border: 0; padding: 0; border-radius: 0; }
+  .zij details > summary::after { content: " ▾"; }
+  .weekstrip { max-width: 600px; margin-inline: -4px 0; border-bottom: 0; padding-bottom: 4px; margin-bottom: 12px; }
+  body[data-scherm="dag"] .dagindeling { border-top: 1px solid var(--lijn); padding-top: 18px; }
+  .dagindeling { column-gap: 32px; }
+  .dag-boven:has(.groet:empty) { display: none; }
+}
+@media (min-width: 900px) {
+  .dagindeling { grid-template-columns: minmax(0, 1fr) 360px; }
+}
+@media (min-width: 961px) {
+  .zij { border-top: 0; padding-top: 0; border-left: 1px solid var(--lijn); padding-left: 24px; }
+}
+
+/* ---------- Telefoon: groet, tabbladen alleen in de maand, verder ongewijzigd ---------- */
+@media (max-width: 640px) {
+  .kop { flex-wrap: wrap; }
+  .kop .weergave-balk { order: 5; flex-basis: 100%; }
+  .kalender { border: 0; }
+  .paneel { background: transparent; border: 0; border-top: 1px solid var(--lijn); border-radius: 0; padding: 14px 0 0; }
+  .zij { gap: 10px; }
+  .hero-titel { font-size: 1.85rem; }
+  .rij-titel { font-size: 16px; }
+  .weekstrip { margin-bottom: 16px; }
+  .grid-scroll { border-radius: 10px; }
+}
+
+/* ================= Na de onafhankelijke ontwerpreview ================= */
+/* Weekblokken: tijd nooit afgeknipt over de rand, tijd lichter dan de titel */
+.blok-tijd { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-weight: 400; color: var(--muted); }
+.blok.bezig .blok-tijd { font-weight: 700; color: color-mix(in srgb, var(--c) 75%, var(--fg)); }
+.blok.voorbij { opacity: 1; background: color-mix(in srgb, var(--c) 7%, var(--kaart)); }
+.blok.voorbij .blok-titel { color: var(--muted); font-weight: 400; }
+.blok.voorbij { border-left-color: color-mix(in srgb, var(--c) 45%, transparent); }
+/* Nu-lijn: zichtbaar over blokken, maar tekst blijft leesbaar */
+.nu-lijn { mix-blend-mode: multiply; }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) .nu-lijn { mix-blend-mode: normal; opacity: 0.85; } }
+:root[data-thema="donker"] .nu-lijn { mix-blend-mode: normal; opacity: 0.85; }
+/* Dag-tijdlijn en week-tijdlijn op hetzelfde vlak; het vrije blok is een stippellijn, geen gekleurd vlak */
+.dagraster .kolom.vandaag { background: transparent; }
+.gat { background: transparent; border-color: var(--lijn); color: var(--muted); }
+.gat:hover { background: color-mix(in srgb, var(--opdracht) 7%, transparent); }
+/* Vakantie: de arcering blijft ook in het weekend staan (background-color in plaats van background) */
+.dag.weekend { background: none; background-color: color-mix(in srgb, var(--zacht) 60%, var(--kaart)); }
+.dag.weekend.vakantie, .dag.vakantie { background-image: repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--vakantie) 22%, transparent) 7px 9px); }
+.dag:hover { background: none; background-color: var(--zacht); }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) .dag.vakantie, :root:not([data-thema="licht"]) .hd-cel.vakantie { background-image: repeating-linear-gradient(135deg, transparent 0 7px, rgba(255, 255, 255, 0.07) 7px 9px); } }
+:root[data-thema="donker"] .dag.vakantie, :root[data-thema="donker"] .hd-cel.vakantie { background-image: repeating-linear-gradient(135deg, transparent 0 7px, rgba(255, 255, 255, 0.07) 7px 9px); }
+/* Filters: aan = lichte tint van de agendakleur, uit = grijs */
+.filter[aria-pressed="true"] { background: color-mix(in srgb, var(--c) 12%, var(--kaart)); border-color: color-mix(in srgb, var(--c) 55%, transparent); color: var(--fg); }
+.filter[aria-pressed="false"] { border-color: var(--lijn); }
+.filter[aria-pressed="false"] i { background: transparent; border-color: var(--muted); }
+/* Tellers en dagpaneelkop */
+.aantal { vertical-align: middle; position: relative; top: -1px; color: var(--fg); }
+.dagkop h3::first-letter { text-transform: uppercase; }
+/* Dialoog: alle velden in één stijl */
+dialog input[type="time"], dialog input[type="date"], dialog input[type="number"] { width: 100%; border: 1px solid var(--lijn); border-radius: var(--r-knop); padding: 8px 10px; background: var(--bg); font: inherit; color: inherit; }
+dialog textarea { resize: vertical; }
+.venster-inhoud { padding-bottom: 24px; }
+/* Instellingen: agenda's als rijen met een gekleurde streep, niet als drie omrande kaarten */
+.agenda-kaart { border: 0; border-left: 3px solid var(--c); border-radius: 0 10px 10px 0; background: transparent; padding: 10px 12px; }
+.agenda-kaart:has(input:checked) { background: color-mix(in srgb, var(--c) 8%, var(--kaart)); box-shadow: none; border-color: var(--c); }
+.agenda-kaart:not(:has(input:checked)) { border-left-color: var(--lijn); }
+/* Aanraakdoelen: pijltjes bij de weekstrook */
+.weekstrip { grid-template-columns: 32px repeat(7, minmax(0, 1fr)) 32px; }
+.ws-pijl { min-height: 44px; }
+.hd-chip { min-height: 24px; }
+/* Laptop: typregel loopt even breed als de lijnen, filters rechts, alleen het woordmerk in de kop, lijst met leesbreedte */
+@media (min-width: 641px) {
+  .snel { max-width: none; }
+  .snel-form .hoofd { margin-left: 0; }
+  .kop .weergave-balk { justify-content: space-between; }
+  .merk img { display: none; }
+  body[data-scherm="lijst"] #hoofd { max-width: 880px; }
+}
+/* Overlappende weekblokken zijn smal: alleen de begintijd */
+.weekraster-tijd .blok.deel .tot { display: none; }
+
+/* ================= Ronde 2: één navigatie, weeklijst op de telefoon, uiterlijk ================= */
+/* Kop: Vandaag-knop naast de pijlen; stil als je er al bent */
+.hero-nav { align-items: center; gap: 4px; }
+.hero-nav .terugknop { margin-right: 6px; }
+.terugknop.huidig { background: transparent; color: var(--muted); cursor: default; }
+.terugknop.huidig:hover { background: transparent; }
+
+/* Weeklijst (telefoon): zeven dagen onder elkaar */
+.weeklijst { display: flex; flex-direction: column; gap: 6px; }
+.wl-dag { padding: 2px 0 6px; }
+.wl-kop { display: flex; align-items: baseline; gap: 10px; width: 100%; border: 0; background: transparent; text-align: left; padding: 10px 2px 6px; border-bottom: 1px solid var(--lijn); color: var(--fg); min-height: 44px; }
+.wl-d { font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); width: 2.2em; }
+.wl-n { font-family: var(--display); font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wl-info { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-pijl { color: var(--muted); font-size: 20px; line-height: 1; align-self: center; }
+.wl-dag.vandaag .wl-n { color: var(--accent); }
+.wl-dag.vandaag .wl-info { color: var(--accent); font-weight: 700; }
+.wl-dag.weekend .wl-n { color: var(--muted); }
+.wl-dag.vakantie .wl-info { font-style: italic; }
+.wl-leeg { margin: 0; padding: 8px 2px 2px 46px; font-size: 13.5px; color: var(--muted); }
+.wl-dag .rijen { padding-left: 0; }
+.week-leeg { margin: 0 0 12px; }
+
+/* Onderbalk: vier gelijke tabbladen */
+@media (max-width: 640px) {
+  .onderbalk { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; padding-top: 8px; }
+  .onderbalk button { min-height: 48px; justify-content: center; gap: 4px; }
+  .onderbalk svg { width: 24px; height: 24px; }
+  .onderbalk button[aria-current="page"] svg { stroke-width: 2.2; }
+  /* Agendafilters op elk scherm, klein en stil */
+  .weergave-balk { display: flex !important; }
+  .weergave-balk:has(.filters:empty) { display: none !important; }
+  .filter { font-size: 12.5px; padding: 3px 10px; }
+  .filters { gap: 6px; }
+  .kop { row-gap: 8px; }
+  .kop .weergave-balk { order: 5; flex-basis: 100%; justify-content: flex-start; }
+  .wrap { padding-bottom: calc(136px + env(safe-area-inset-bottom)); }
+  .snel { bottom: calc(64px + env(safe-area-inset-bottom)); }
+}
+
+/* Uiterlijk: thema en kleurstalen */
+.stalen { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
+.staal { width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; padding: 0; background: var(--c); box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 12%, transparent); position: relative; }
+:root:not([data-thema="licht"]) .staal { --staal: var(--cd); }
+@media (prefers-color-scheme: dark) { :root:not([data-thema="licht"]) .staal { background: var(--cd); } }
+:root[data-thema="donker"] .staal { background: var(--cd); }
+.staal[aria-pressed="true"] { border-color: var(--kaart); box-shadow: 0 0 0 2px var(--fg); }
+.staal[aria-pressed="true"]::after { content: ""; position: absolute; inset: 0; margin: auto; width: 10px; height: 6px; border-left: 2.5px solid #fff; border-bottom: 2.5px solid #fff; transform: translateY(-1px) rotate(-45deg); }
+#inst-uiterlijk .label { margin-top: 8px; }
+#inst-uiterlijk .doelgroep { margin-bottom: 6px; align-self: flex-start; }
+.dg-label { margin-top: 10px; }
+.pabo-keuze .doelgroep { margin-top: 2px; }
+
+/* Telefoon: de Vandaag-knop in de kop alleen als je niet in de huidige week of maand bent (de Dag-tab springt naar vandaag) */
+@media (max-width: 640px) {
+  .terugknop.huidig { display: none; }
+  .hero-nav .terugknop { font-size: 12.5px; padding: 4px 9px; margin-right: 2px; }
+}
+/* Donker: geen lijn om de inhoud (de oude kaartschaduw won op specificiteit); de typbalk op de telefoon houdt zijn rand */
+:root:not([data-thema="licht"]) .kalender, :root:not([data-thema="licht"]) .paneel, :root[data-thema="donker"] .kalender, :root[data-thema="donker"] .paneel { box-shadow: none; }
+@media (min-width: 641px) { :root:not([data-thema="licht"]) .snel-form, :root[data-thema="donker"] .snel-form { box-shadow: none; } }
+/* Toast: natuurlijke breedte, tekst breekt alleen bij echt lange woorden */
+.toast { width: max-content; }
+.toast span { flex: 1 1 auto; min-width: 0; }
+/* Venster langer dan het scherm (telefoon): binnen het venster scrollen */
+dialog#venster { max-height: calc(100dvh - 24px); overflow: auto; }

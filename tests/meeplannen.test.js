@@ -64,7 +64,7 @@ const res = []; const check = (n, ok, x) => res.push((ok ? "PASS " : "FAIL ") + 
   check("plan in: toast met Aanpassen en Ongedaan maken", (await t.locator("#toast").innerText()).includes("Ingepland") && await t.locator("#toastExtra").isVisible() && await t.locator("#toastOngedaan").isVisible());
   await t.screenshot({ path: path.join(OUT, "m2-planin.png"), fullPage: true });
   await t.click("#toastExtra"); await w(t, 150);
-  check("toast 'Aanpassen' opent het venster van het item", (await t.locator("#venstertitel").innerText()) === "Afspraak wijzigen" && (await t.inputValue("#f-tijd")) === "14:30");
+  check("toast 'Aanpassen' opent het venster van het item", (await t.locator("#venstertitel").innerText()) === "Wijzigen" && (await t.inputValue("#f-tijd")) === "14:30");
   await t.click("#f-annuleer");
   const gaten2 = await t.locator(".dagraster .gat").allInnerTexts();
   check("gaten: na inplannen begint het gat om 15:30", gaten2.length === 1 && gaten2[0].includes("15:30–18:00"), gaten2);

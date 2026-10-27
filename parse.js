@@ -11,6 +11,8 @@
   - eindtijd: 14:00-15:30, 10u tot 16u, van 9 tot 12, 14:00 1 uur, 13:30 45 min, "tot 17:00" (alleen eindtijd)
   - agenda:  #school, #werk, #prive / #privé / #persoonlijk
   - soort:   de woorden deadline, toets, tentamen, herkansing, afspraak (blijven in de titel staan)
+  - herhaling: "elke dinsdag", "iedere di", "wekelijks", "elke week", met einde "t/m 31 jan" of "tot en met 31 januari"
+  - standaardduur zonder eindtijd: college/werkcollege 1,5 u, dienst 4 u, tandarts/dokter 30 min, overleg/vergadering 1 u
 */
 (function (root) {
   "use strict";
@@ -30,6 +32,7 @@
   const TELWOORD = { een: 1, twee: 2, drie: 3, vier: 4, vijf: 5, zes: 6, zeven: 7, acht: 8, negen: 9, tien: 10 };
   const AGENDA = { school: "school", werk: "werk", prive: "persoonlijk", "privé": "persoonlijk", persoonlijk: "persoonlijk" };
   const SOORT = { deadline: "deadline", toets: "toets", tentamen: "toets", herkansing: "herkansing", afspraak: "afspraak" };
+  const DUUR = [[/\b(hoor|werk)?college\b/u, 90], [/\b(nacht|avond|ochtend)?dienst\b/u, 240], [/\b(tandarts|dokter|huisarts|kapper|fysio)\b/u, 30], [/\b(overleg|vergadering|gesprek|intake|bellen)\b/u, 60], [/\b(stage)\b/u, 420]];
 
   const pad = (n) => String(n).padStart(2, "0");
   const iso = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
@@ -142,6 +145,26 @@
       if (r) { eind = r.waarde; neem(r.s, r.e, "eind", eind); }
     }
 
+    // 5c. standaardduur op trefwoord: "college 10:00" wordt 10:00–11:30
+    let eindStandaard = false;
+    if (tijd && !eind) {
+      const d = DUUR.find(([re]) => re.test(laag));
+      if (d) { const [h, mm] = tijd.split(":").map(Number); const t = Math.min(h * 60 + mm + d[1], 23 * 60 + 59); eind = pad(Math.floor(t / 60)) + ":" + pad(t % 60); eindStandaard = true; }
+    }
+
+    // 5d. herhaling: "elke dinsdag", "iedere di", "wekelijks", "elke week"; einde "t/m 31 jan", "tot en met 31 januari"
+    let herhaal = null;
+    const tm = zoek(B0 + "(?:t/m|tm|tot\\s+en\\s+met)\\s+(?:(\\d{1,2})\\s*(" + MAAND_RE + ")\\.?(?:\\s+(\\d{4}))?|(\\d{1,2})[-/](\\d{1,2})(?:[-/](\\d{4}))?)" + B1, (m) => {
+      if (m[2]) { const mnd = MAAND[m[2]]; return m[3] ? (geldig(+m[3], mnd, +m[1]) ? new Date(+m[3], mnd, +m[1]) : null) : zonderJaar(van, mnd, +m[1]); }
+      const mnd = +m[5] - 1; return m[6] ? (geldig(+m[6], mnd, +m[4]) ? new Date(+m[6], mnd, +m[4]) : null) : zonderJaar(van, mnd, +m[4]);
+    });
+    const elke = zoek(B0 + "(?:elke|iedere)\\s+(" + DAG_ALLE + ")\\.?" + B1, (m) => WEEKDAG[m[1]]) || zoek(B0 + "(?:wekelijks|elke\\s+week|iedere\\s+week)" + B1, () => -1);
+    if (elke) {
+      herhaal = { elke: elke.waarde, tm: tm ? iso(tm.waarde) : null };
+      neem(elke.s, elke.e, "herhaal", elke.waarde);
+      if (tm) neem(tm.s, tm.e, "tm", iso(tm.waarde));
+      if (elke.waarde >= 0) { datum = iso(eerstvolgende(van, elke.waarde, false)); }
+    }
 
     // 6. dag
     const datumPatronen = [
@@ -190,6 +213,7 @@
       const r = zoek(p, f);
       if (r) { datum = iso(r.waarde); neem(r.s, r.e, "datum", datum); break; }
     }
+    if (herhaal && herhaal.elke < 0) herhaal.elke = new Date((datum || iso(van)) + "T12:00:00").getDay();
 
     // 7. soort (het woord blijft in de titel staan)
     const s = new RegExp(B0 + "(" + Object.keys(SOORT).join("|") + ")" + B1, "iu").exec(laag);
@@ -215,6 +239,8 @@
       soort: soort || "opdracht",
       agenda: agenda || o.standaardAgenda || null,
       agendaHerkend: !!agenda,
+      eindStandaard,
+      herhaal,
       delen
     };
   }

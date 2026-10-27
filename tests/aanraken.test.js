@@ -43,7 +43,7 @@ const res = []; const check = (n, ok, x) => res.push((ok ? "PASS " : "FAIL ") + 
   check("menu: afvinken", (await data()).find((o) => o.id === "t2").klaar === true && !(await p.locator("#rijMenu").isVisible()));
   // 4. gewone tik op tekst = wijzigen
   await p.tap('.rij[data-id="t2"] .rij-tekst'); await p.waitForTimeout(200);
-  check("tik op tekst opent wijzigen", (await p.locator("#venstertitel").innerText()) === "To-do wijzigen");
+  check("tik op tekst opent wijzigen", (await p.locator("#venstertitel").innerText()) === "Wijzigen");
   await p.click("#f-annuleer");
   // 5. vegen op de weekstrook -> volgende week
   await aanraak(".weekstrip", [-30, -80, -120], 0); await p.waitForTimeout(200);

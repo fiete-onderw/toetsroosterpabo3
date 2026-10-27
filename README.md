@@ -104,7 +104,11 @@ Alle vaste Pabo-gegevens staan in **`toetsen.js`**. Zodra een toetsdatum bekend 
 
 ## Ontwerp
 
-Digigenda is ontworpen als "papier en inkt": inhoud staat direct op warm papier, gescheiden door dunne lijnen en witruimte, niet door kaarten. De dag staat groot bovenaan; het enige gekleurde vlak is de Nu-kaart en de enige felle kleur is de rode nu-lijn. De achtergrond verkleurt heel licht mee met het dagdeel. Kleuren, letters, ruimtematen, vormen en beweging staan in `docs/ontwerp.md`, net als de uitkomst van een onafhankelijke ontwerpreview. Alle kleurcombinaties halen WCAG AA (minimaal 4,5:1); beweging staat uit bij `prefers-reduced-motion`. Schermafbeeldingen op 360, 390, 768 en 1440 px (licht en donker) staan in `docs/schermen/`.
+Digigenda is ontworpen als "papier en inkt": inhoud staat direct op warm papier, gescheiden door dunne lijnen en witruimte, niet door kaarten. De dag staat groot bovenaan; het enige gekleurde vlak is de Nu-kaart en de enige felle kleur is de rode nu-lijn. De achtergrond verkleurt heel licht mee met het dagdeel. Kleuren, letters, ruimtematen, vormen en beweging staan in `docs/ontwerp.md`, net als de uitkomst van een onafhankelijke ontwerpreview. Alle kleurcombinaties halen WCAG AA (minimaal 4,5:1); beweging staat uit bij `prefers-reduced-motion`. Schermafbeeldingen op 360, 390, 768 en 1440 px (licht en donker) staan in `docs/schermen/`; een echte doorloop op een nagebootste iPhone staat in `docs/schermen/doorloop/`.
+
+**Personaliseren** (Instellingen): thema (automatisch, licht, donker), accentkleur, kleur per agenda, startweergave, en je dagritme (dag van … tot …, studeren liefst 's ochtends/'s middags/'s avonds, pauze tussen afspraken). Op de telefoon zijn er vier tabbladen onderin (Dag, Week, Maand, Lijst); de week is daar een lijst van zeven dagen.
+
+**Reeksen**: typ "elke dinsdag 9:00-15:30 stage t/m 31 jan" of "wekelijks lesvoorbereiding inleveren vrijdag tot 17:00". Zonder einddatum loopt de reeks tot het einde van de huidige periode. In het venster van zo'n item staat "Deze en volgende verwijderen". Trefwoorden krijgen een standaardduur (college 1,5 u, dienst 4 u, tandarts 30 min). Deadlines en toetsen tellen af ("over 6 dagen"); de Lijst toont onder "Daarna" de eerstvolgende toetsen en deadlines na deze week. Een toets zonder datum zet je zelf in je agenda met "Datum bekend?".
 
 ## Bestanden
 

@@ -39,7 +39,7 @@ const INST = { agendas: ["school", "werk", "persoonlijk"], pabo: true, doelgroep
     const p = await maak(vp, schema);
     const shot = async (n, full) => { await p.waitForTimeout(250); await p.screenshot({ path: `${OUT}/${naam}-${n}.png`, fullPage: full !== false }); await scroll(p, naam + "-" + n); };
     await shot("vandaag");
-    if (laptop) { await p.click('[data-weergave="week"]'); } else { await p.click('[data-modus="week"]'); }
+    if (laptop) { await p.click('[data-weergave="week"]'); } else { await p.click('[data-onder="week"]'); }
     await shot("week");
     if (laptop) await p.click('[data-weergave="maand"]'); else await p.click('[data-onder="maand"]');
     await shot("maand");
@@ -49,7 +49,7 @@ const INST = { agendas: ["school", "werk", "persoonlijk"], pabo: true, doelgroep
       await p.click('[data-weergave="dag"]'); await shot("dag"); await p.click('.uurvak[data-slot="2026-10-22|16:00"]'); await shot("nieuw", false); await p.click("#f-annuleer");
       await p.click("#instellingenKnop"); await shot("instellingen", false); await p.click("#inst-sluit");
     } else {
-      await p.click('[data-onder="vandaag"]'); await p.click("#snelInvoer"); await p.type("#snelInvoer", "morgen 14:00-15:30 overleg stage"); await shot("typen", false);
+      await p.click('[data-onder="dag"]'); await p.click("#snelInvoer"); await p.type("#snelInvoer", "morgen 14:00-15:30 overleg stage"); await shot("typen", false);
     }
     await p.context().close();
   }

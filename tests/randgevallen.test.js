@@ -70,17 +70,17 @@ const res = []; const check = (n, ok, x) => res.push((ok ? "PASS " : "FAIL ") + 
   check("lege dag: rustige tekst, geen tijdlijn", za.includes("Geen afspraken") && za.includes("Niets te doen") && (await t.locator(".dagraster").count()) === 0, za.slice(0, 300));
   await t.screenshot({ path: OUT + "/r3-390-leeg.png", fullPage: true });
   // week
-  await t.click('[data-onder="vandaag"]'); await t.click('[data-modus="week"]'); await t.waitForTimeout(200);
+  await t.click('[data-onder="dag"]'); await t.click('[data-onder="week"]'); await t.waitForTimeout(200);
   await geenScroll(t, "390 week", 390);
-  check("week: vervolgblok nachtdienst op donderdag", (await t.locator('.kolom[data-tijdlijn-datum="2026-10-22"] .blok.vervolg').count()) === 1);
-  check("week: hoogstens 3 to-do-chips per dag plus '+N'", (await t.locator(".hd-cel .hd-chip").count()) <= 3 * 7 && (await t.locator(".hd-meer").first().innerText()).startsWith("+"));
+  check("week: vervolgblok nachtdienst op donderdag", (await t.locator('.weeklijst .rij.vervolg').count()) >= 1 && (await t.locator('.weeklijst .rij.vervolg').first().innerText()).includes("06:00"));
+  check("week (telefoon): lijst met 7 dagen, lange to-do's zonder overflow", (await t.locator(".weeklijst .wl-dag").count()) === 7 && (await t.locator(".weeklijst .rij").count()) >= 30);
   await t.screenshot({ path: OUT + "/r4-390-week.png", fullPage: true });
   // lijst
   await t.click('[data-onder="lijst"]'); await t.waitForTimeout(200);
   await geenScroll(t, "390 lijst", 390);
   check("lijst: nachtdienst meta 'tot de volgende ochtend'", (await t.locator("#hoofd").innerText()).includes("tot de volgende ochtend"));
   // formulier: nachtdienst invoeren via het venster
-  await t.click('[data-onder="vandaag"]'); await t.waitForTimeout(150);
+  await t.click('[data-onder="dag"]'); await t.waitForTimeout(150);
   await t.click('[data-nieuw="2026-10-22"]'); await t.waitForTimeout(150);
   await t.fill("#f-titel", "Late dienst"); await t.fill("#f-tijd", "23:00"); await t.dispatchEvent("#f-tijd", "input"); await t.fill("#f-eind", "02:00"); await t.dispatchEvent("#f-eind", "input");
   check("venster legt uit dat het de volgende ochtend eindigt", (await t.locator("#f-uitleg").innerText()).includes("volgende ochtend om 02:00"), await t.locator("#f-uitleg").innerText());
@@ -133,7 +133,7 @@ const res = []; const check = (n, ok, x) => res.push((ok ? "PASS " : "FAIL ") + 
   const s = await maak({ width: 320, height: 640 });
   await s.screenshot({ path: OUT + "/r6-320-vandaag.png", fullPage: true });
   await geenScroll(s, "320 vandaag", 320);
-  await s.click('[data-modus="week"]'); await s.waitForTimeout(200);
+  await s.click('[data-onder="week"]'); await s.waitForTimeout(200);
   await geenScroll(s, "320 week", 320);
   await s.screenshot({ path: OUT + "/r7-320-week.png", fullPage: true });
   await s.click('[data-onder="maand"]'); await s.waitForTimeout(200);
@@ -162,7 +162,7 @@ const res = []; const check = (n, ok, x) => res.push((ok ? "PASS " : "FAIL ") + 
   const lk = await maak({ width: 1366, height: 900 });
   await lk.click('[data-weergave="dag"]'); await lk.waitForTimeout(150);
   await lk.focus('.rij[data-id="t1"] .rij-tekst'); await lk.keyboard.press("Enter"); await lk.waitForTimeout(150);
-  check("toetsenbord: Enter op een to-do opent wijzigen", (await lk.locator("#venstertitel").innerText()) === "To-do wijzigen");
+  check("toetsenbord: Enter op een to-do opent wijzigen", (await lk.locator("#venstertitel").innerText()) === "Wijzigen");
   await lk.keyboard.press("Escape"); await lk.waitForTimeout(100);
   check("toetsenbord: Escape sluit het venster", !(await lk.locator("#venster").isVisible()));
   await lk.focus('.vink[data-klaar="t1"]'); await lk.keyboard.press("Space"); await lk.waitForTimeout(150);

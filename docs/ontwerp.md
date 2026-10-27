@@ -94,3 +94,21 @@ Een apart review-agent beoordeelde twintig schermafbeeldingen zonder de bouw gez
 - "Geen Vandaag-knop op laptop": de knop "Deze maand", "Deze week" of "Vandaag" verschijnt zodra je niet in de huidige periode bent.
 - Weekweergave op de telefoon als lijst van zeven dagen: een goed idee, maar een andere weergave in plaats van een opmaakwijziging. Genoteerd als vervolgstap.
 - Agendafilters op elk telefoonscherm: op Vandaag, Week en Lijst is bewust alles zichtbaar; filteren hoort bij de maand.
+
+## Ronde 2 (oktober 2026): alle aanbevelingen doorgevoerd, kleur en personalisatie
+
+Op verzoek van de eigenaar zijn ook de eerder afgewezen punten van de reviewer gebouwd, omdat ze de app rustiger en overzichtelijker maken:
+- **Eén navigatiemodel op de telefoon.** De onderbalk heeft vier gelijke tabbladen (Dag, Week, Maand, Lijst) in één lijnstijl; de verheven Vandaag-knop en de Dag/Week-schakelaar in de kop zijn weg. Nog een keer op Dag tikken springt naar vandaag.
+- **Weekweergave op de telefoon als lijst** van zeven dagen onder elkaar, met to-do's, afspraken en doorlopende nachtdiensten per dag; de dagkop opent de dag. Het raster blijft op tablet en laptop.
+- **Vandaag-knop op laptop** altijd naast de pijlen (stil als je er al bent); op de telefoon alleen als je niet in de huidige week of maand bent.
+- **Agendafilters op elk telefoonscherm**, klein en met zichtbare aan/uit-toestand.
+- **Eén woord voor toevoegen** (dialoog "Toevoegen"/"Wijzigen", knoppen "Toevoegen"), dagpaneelkop gelijk aan de dagkop, label "Toetsen tonen voor" boven de specialisatiekeuze, lijn-icoon voor instellingen.
+- **Lege toestanden**: week zonder afspraken, dag zonder to-do's, "vrij" per dag in de weeklijst.
+
+**Kleur.** Het palet blijft warm papier met inkt; agendakleuren en accent zijn natuurlijke tinten (inktblauw, mosgroen, zeegroen, pruim, lavendel, roest, oker, leisteen), geen verlopen, geen gloed. Elke tint heeft een lichte en een donkere variant en haalt 4,5:1 op het papier én met witte (licht) of donkere (donker) tekst erop.
+
+**Personalisatie** (Instellingen → Uiterlijk en Meeplannen; gaat mee naar andere apparaten bij inloggen):
+- Thema: automatisch, licht of donker (ook tegen de toestelinstelling in).
+- Accentkleur (5 tinten) en kleur per agenda (8 tinten).
+- Opent op: automatisch, Dag, Week, Maand of Lijst.
+- Dagritme: mijn dag loopt van … tot …, studeren liefst 's ochtends/'s middags/'s avonds, pauze tussen afspraken (0/15/30 min). Vrije tijd, Plan in en studieblokken volgen dit.

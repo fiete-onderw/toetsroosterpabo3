@@ -4,7 +4,7 @@
   --bg: #f5f1ec;          /* papier */
   --kaart: #fffdfb;       /* Nu-kaart, dialogen, raster */
   --fg: #1c2030;          /* inkt */
-  --muted: #646a7a;       /* bijschriften en labels */
+  --muted: #5f6575;       /* bijschriften en labels (4,8:1 op de lichtste vlakken) */
   --lijn: #e4ddd7;        /* hairlines */
   --kopregel: #efe9e4;    /* rij met dagnamen, tellers */
   --zacht: #efe9e4;       /* weekend / buiten de maand / aanwijzen */
@@ -353,7 +353,7 @@ body.geen-scroll { overflow: hidden; }
 .vink-label input { margin-top: 3px; }
 
 /* ================= Vandaag, tijdblokken en onderbalk ================= */
-:root { --nu: #d93a2b; }
+:root { --nu: #c9311f; }
 @media (prefers-color-scheme: dark) { :root { --nu: #ff6b5b; } }
 
 /* Rijen: to-do's hebben een vinkje, blokken een tijdstip */
@@ -889,3 +889,54 @@ body[data-scherm="dag"] .voet, body[data-scherm="week"] .voet { display: none; }
   .weekstrip { margin-bottom: 16px; }
   .grid-scroll { border-radius: 10px; }
 }
+
+/* ================= Na de onafhankelijke ontwerpreview ================= */
+/* Weekblokken: tijd nooit afgeknipt over de rand, tijd lichter dan de titel */
+.blok-tijd { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-weight: 400; color: var(--muted); }
+.blok.bezig .blok-tijd { font-weight: 700; color: color-mix(in srgb, var(--c) 75%, var(--fg)); }
+.blok.voorbij { opacity: 1; background: color-mix(in srgb, var(--c) 7%, var(--kaart)); }
+.blok.voorbij .blok-titel { color: var(--muted); font-weight: 400; }
+.blok.voorbij { border-left-color: color-mix(in srgb, var(--c) 45%, transparent); }
+/* Nu-lijn: zichtbaar over blokken, maar tekst blijft leesbaar */
+.nu-lijn { mix-blend-mode: multiply; }
+@media (prefers-color-scheme: dark) { .nu-lijn { mix-blend-mode: normal; opacity: 0.85; } }
+/* Dag-tijdlijn en week-tijdlijn op hetzelfde vlak; het vrije blok is een stippellijn, geen gekleurd vlak */
+.dagraster .kolom.vandaag { background: transparent; }
+.gat { background: transparent; border-color: var(--lijn); color: var(--muted); }
+.gat:hover { background: color-mix(in srgb, var(--opdracht) 7%, transparent); }
+/* Vakantie: de arcering blijft ook in het weekend staan (background-color in plaats van background) */
+.dag.weekend { background: none; background-color: color-mix(in srgb, var(--zacht) 60%, var(--kaart)); }
+.dag.weekend.vakantie, .dag.vakantie { background-image: repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--vakantie) 22%, transparent) 7px 9px); }
+.dag:hover { background: none; background-color: var(--zacht); }
+@media (prefers-color-scheme: dark) {
+  .dag.vakantie, .hd-cel.vakantie { background-image: repeating-linear-gradient(135deg, transparent 0 7px, rgba(255, 255, 255, 0.07) 7px 9px); }
+}
+/* Filters: aan = lichte tint van de agendakleur, uit = grijs */
+.filter[aria-pressed="true"] { background: color-mix(in srgb, var(--c) 12%, var(--kaart)); border-color: color-mix(in srgb, var(--c) 55%, transparent); color: var(--fg); }
+.filter[aria-pressed="false"] { border-color: var(--lijn); }
+.filter[aria-pressed="false"] i { background: transparent; border-color: var(--muted); }
+/* Tellers en dagpaneelkop */
+.aantal { vertical-align: middle; position: relative; top: -1px; color: var(--fg); }
+.dagkop h3::first-letter { text-transform: uppercase; }
+/* Dialoog: alle velden in één stijl */
+dialog input[type="time"], dialog input[type="date"], dialog input[type="number"] { width: 100%; border: 1px solid var(--lijn); border-radius: var(--r-knop); padding: 8px 10px; background: var(--bg); font: inherit; color: inherit; }
+dialog textarea { resize: vertical; }
+.venster-inhoud { padding-bottom: 24px; }
+/* Instellingen: agenda's als rijen met een gekleurde streep, niet als drie omrande kaarten */
+.agenda-kaart { border: 0; border-left: 3px solid var(--c); border-radius: 0 10px 10px 0; background: transparent; padding: 10px 12px; }
+.agenda-kaart:has(input:checked) { background: color-mix(in srgb, var(--c) 8%, var(--kaart)); box-shadow: none; border-color: var(--c); }
+.agenda-kaart:not(:has(input:checked)) { border-left-color: var(--lijn); }
+/* Aanraakdoelen: pijltjes bij de weekstrook */
+.weekstrip { grid-template-columns: 32px repeat(7, minmax(0, 1fr)) 32px; }
+.ws-pijl { min-height: 44px; }
+.hd-chip { min-height: 24px; }
+/* Laptop: typregel loopt even breed als de lijnen, filters rechts, alleen het woordmerk in de kop, lijst met leesbreedte */
+@media (min-width: 641px) {
+  .snel { max-width: none; }
+  .snel-form .hoofd { margin-left: 0; }
+  .kop .weergave-balk { justify-content: space-between; }
+  .merk img { display: none; }
+  body[data-scherm="lijst"] #hoofd { max-width: 880px; }
+}
+/* Overlappende weekblokken zijn smal: alleen de begintijd */
+.weekraster-tijd .blok.deel .tot { display: none; }

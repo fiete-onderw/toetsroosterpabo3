@@ -17,6 +17,7 @@ Daarna: `npm i playwright` (of zet `PLAYWRIGHT_PAD` / `CHROMIUM_PAD` naar een be
 | `meeplannen.test.js` | Vrije tijd, Plan in, studieblokken, dagstart, avondblik |
 | `openen.test.js` | Face ID na X minuten, melding/link opent item, shortcuts, share-target via de service worker, cache-first |
 | `schermafbeeldingen.js` | Maakt schermafbeeldingen in `tests/schermen/` |
+| `ontwerp-schermen.js` | Maakt de ontwerpset op 360, 390, 768 en 1440 px, licht en donker (`OUT=docs/schermen node tests/ontwerp-schermen.js`) |
 
 Alles in één keer: `sh tests/alles.sh` (verwacht een server op 8766).
 

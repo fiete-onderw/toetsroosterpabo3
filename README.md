@@ -102,6 +102,10 @@ Alle vaste Pabo-gegevens staan in **`toetsen.js`**. Zodra een toetsdatum bekend 
    bij een ververste of verwijderde import horen). De beheerconnector vraagt bij `DELETE` om een bevestiging en kon dat blok
    daarom niet uitvoeren. Zonder dit blok werkt alles; de app ruimt die rijen zelf op.
 
+## Ontwerp
+
+Digigenda is ontworpen als "papier en inkt": inhoud staat direct op warm papier, gescheiden door dunne lijnen en witruimte, niet door kaarten. De dag staat groot bovenaan; het enige gekleurde vlak is de Nu-kaart en de enige felle kleur is de rode nu-lijn. De achtergrond verkleurt heel licht mee met het dagdeel. Kleuren, letters, ruimtematen, vormen en beweging staan in `docs/ontwerp.md`, net als de uitkomst van een onafhankelijke ontwerpreview. Alle kleurcombinaties halen WCAG AA (minimaal 4,5:1); beweging staat uit bij `prefers-reduced-motion`. Schermafbeeldingen op 360, 390, 768 en 1440 px (licht en donker) staan in `docs/schermen/`.
+
 ## Bestanden
 
 | Bestand | Wat |
@@ -118,7 +122,7 @@ Alle vaste Pabo-gegevens staan in **`toetsen.js`**. Zodra een toetsdatum bekend 
 | `supabase/functions/digigenda-agenda/` | Serverfunctie voor het agenda-abonnement (.ics) |
 | `supabase/functions/digigenda-meldingen/` | Serverfunctie die pushmeldingen versleutelt en verstuurt |
 | `supabase/functions/digigenda-import/` | Serverfunctie die agendalinks veilig ophaalt en leest |
-| `docs/` | Onderzoek importroutes, testresultaten per route, beveiligingsaudit, schets van het meeplannen |
+| `docs/` | Ontwerprichting en ontwerpsysteem (`ontwerp.md`), onderzoek importroutes, testresultaten per route, beveiligingsaudit, schets van het meeplannen, schermafbeeldingen (`schermen/`) |
 | `tests/` | Alle tests (zie `tests/README.md`) |
 
 ## Bronnen

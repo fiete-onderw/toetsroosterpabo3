@@ -22,11 +22,11 @@ De **datumkop op papier**: de dag staat groot en vet bovenaan, direct op de acht
 | `--bg` | `#f5f1ec` (ochtend `#f7f2ea`, avond `#f1eff3`, nacht `#edeef2`) | papier |
 | `--kaart` | `#fffdfb` | Nu-kaart, dialogen, maandraster |
 | `--fg` | `#1c2030` | inkt |
-| `--muted` | `#646a7a` | bijschriften, labels (contrast 4.8:1 op papier) |
+| `--muted` | `#5f6575` | bijschriften, labels (contrast 4,8:1 op de lichtste vlakken) |
 | `--lijn` | `#e4ddd7` | hairlines |
 | `--zacht` | `#efe9e4` | weekend, aanwijzen |
 | `--accent` | `#2b5a86` | knoppen, vandaag, gekozen dag (6.9:1 op wit) |
-| `--nu` | `#d6392c` | nu-lijn en Nu-label, nergens anders |
+| `--nu` | `#c9311f` | nu-lijn en Nu-label, nergens anders |
 
 Agenda's en toetssoorten houden hun eigen kleur (school blauw, werk groen, persoonlijk magenta, landelijke kennistoets rood, deadline paars, herkansing amber). Ze worden alleen als dunne streep, stip of lichte tint gebruikt, nooit als vol vlak met tekst erin, behalve bij vaste toetsen in het maandraster.
 
@@ -67,3 +67,30 @@ Papier `#14161c`, kaart `#1b1e26`, inkt `#eceef2`, bijschrift `#9aa0ae`, lijn `#
 - **Telefoon** (tot 640 px): groet en rond accountknopje bovenin, datumkop, weekstrook, Nu-kaart, to-do's, tijdlijn. Typbalk en onderbalk zweven onderaan.
 - **Tablet** (641 tot 899 px): kop op één regel (woordmerk, tabbladen, account), typregel eronder, inhoud in één kolom.
 - **Laptop** (vanaf 900 px): kop op één regel met tabbladen in het midden en agendafilters rechts; dag- en weekweergave met tijdlijn links en Nu-kaart plus to-do's rechts; maand met raster links en dagpaneel rechts, gescheiden door een lijn.
+
+## Onafhankelijke review (oktober 2026)
+
+Een apart review-agent beoordeelde twintig schermafbeeldingen zonder de bouw gezien te hebben. Scores als hulpmiddel: ontwerpkwaliteit 6,5, originaliteit 7, vakmanschap 5,5, functionaliteit 6.
+
+**Overgenomen en doorgevoerd**
+- Tijden in weekblokken werden afgeknipt over de rand; nu met ellipsis, en bij overlappende blokken alleen de begintijd.
+- De rode nu-lijn liep door tekst; nu `mix-blend-mode: multiply` in licht, zodat de tekst leesbaar blijft.
+- De dag-tijdlijn stond op een grijs vlak en de week-tijdlijn op wit; nu allebei op het papier.
+- Het blok "15:00–18:00 vrij" was een derde gekleurd vlak; nu een stippellijn met alleen het label.
+- Afgelopen afspraken waren als geheel uitgegrijsd (rond 3:1); nu volle dekking met bijschriftkleur (4,8:1).
+- Tijd- en datumvelden in de dialoog weken af van tekstvelden; nu één veldstijl.
+- De typregel op laptop eindigde op 69 % van de breedte; nu even breed als de lijnen, filters rechts.
+- Filters toonden niet of ze aan of uit stonden; aan heeft nu een lichte tint van de agendakleur.
+- De vakantie-arcering viel in het weekend weg (de weekendachtergrond overschreef de arcering); hersteld, en in donker beter zichtbaar.
+- Instellingen toonden drie dik omrande agendakaarten; nu rijen met een gekleurde streep.
+- Lijst op laptop had geen leesbreedte; nu maximaal 880 px.
+- Tellerbadges, dagpaneelkop met hoofdletter, pijltjes bij de weekstrook op 44 px hoog, logo-icoon (met oranje) uit de kop.
+- Bijschriftkleur en nu-rood iets donkerder zodat elke combinatie 4,5:1 haalt.
+
+**Bewust niet overgenomen**
+- Onderbalk met Vandaag-knop en de Dag/Week-schakelaar vervangen door vier gelijke tabbladen: de onderbalk en de schakelaar zijn een bewuste keuze uit het "rust"-ontwerp (één vraag per scherm) en zijn uitgebreid getest.
+- Het veld "Soort" schrappen: deadline, toets en herkansing hebben het nodig voor kleur, meldingen en studieblokken.
+- Datum "10/22/2026" en "04:00 PM": dat is de en-US-locale van de testbrowser; op een Nederlands toestel toont de browser Nederlandse velden.
+- "Geen Vandaag-knop op laptop": de knop "Deze maand", "Deze week" of "Vandaag" verschijnt zodra je niet in de huidige periode bent.
+- Weekweergave op de telefoon als lijst van zeven dagen: een goed idee, maar een andere weergave in plaats van een opmaakwijziging. Genoteerd als vervolgstap.
+- Agendafilters op elk telefoonscherm: op Vandaag, Week en Lijst is bewust alles zichtbaar; filteren hoort bij de maand.

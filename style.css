@@ -1012,3 +1012,5 @@ dialog textarea { resize: vertical; }
 /* Toast: natuurlijke breedte, tekst breekt alleen bij echt lange woorden */
 .toast { width: max-content; }
 .toast span { flex: 1 1 auto; min-width: 0; }
+/* Venster langer dan het scherm (telefoon): binnen het venster scrollen */
+dialog#venster { max-height: calc(100dvh - 24px); overflow: auto; }

@@ -18,7 +18,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
 <link rel="stylesheet" href="style.css?v=20261023b">
 </head>
 <body>
@@ -26,13 +26,22 @@
 
   <header class="kop">
     <div class="merk">
-      <img src="icons/icon.svg" alt="" width="42" height="42">
-      <div>
+      <img src="icons/icon.svg" alt="" width="30" height="30">
+      <div class="merk-tekst">
         <h1>Digigenda</h1>
         <p class="sub" id="ondertitel"></p>
       </div>
     </div>
     <p class="kop-groet" id="kopGroet"></p>
+    <nav class="weergave-balk" aria-label="Weergave">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-weergave="maand">Maand</button>
+        <button type="button" role="tab" data-weergave="week">Week</button>
+        <button type="button" role="tab" data-weergave="dag">Dag</button>
+        <button type="button" role="tab" data-weergave="lijst">Lijst</button>
+      </div>
+      <div class="filters" id="agendaFilters" aria-label="Agenda's tonen"></div>
+    </nav>
     <div class="kop-acties">
       <div class="kop-modus" id="kopModus"></div>
       <button type="button" class="zacht" id="accountKnop">Inloggen</button>
@@ -54,16 +63,6 @@
 
   <div class="melding-balk" id="slotBalk" hidden></div>
   <div class="melding-balk zacht-balk" id="openBalk" hidden></div>
-
-  <nav class="weergave-balk" aria-label="Weergave">
-    <div class="tabs" role="tablist">
-      <button type="button" role="tab" data-weergave="maand">Maand</button>
-      <button type="button" role="tab" data-weergave="week">Week</button>
-      <button type="button" role="tab" data-weergave="dag">Dag</button>
-      <button type="button" role="tab" data-weergave="lijst">Lijst</button>
-    </div>
-    <div class="filters" id="agendaFilters" aria-label="Agenda's tonen"></div>
-  </nav>
 
   <nav class="jaarstrook" id="jaarstrook" aria-label="Maanden" hidden></nav>
 

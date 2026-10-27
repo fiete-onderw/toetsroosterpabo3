@@ -38,7 +38,7 @@ const res = []; const check = (n, ok, x) => res.push((ok ? "PASS " : "FAIL ") + 
 
   // ---- telefoon: dagstart, gaten, plan in via menu ----
   const t = await maak({ width: 390, height: 844 });
-  check("dagstart: kaart met to-do's van eerder (2)", await t.locator(".dagstart").isVisible() && (await t.locator(".dagstart").innerText()).includes("Nog open van eerder · 2") && (await t.locator(".dagstart .ds-rij").count()) === 2);
+  check("dagstart: kaart met to-do's van eerder (2)", await t.locator(".dagstart").isVisible() && (await t.locator(".dagstart").textContent()).includes("Nog open van eerder · 2") && (await t.locator(".dagstart .ds-rij").count()) === 2);
   check("dagstart: de to-do-lijst toont ze niet dubbel", (await t.locator('.dag-todo .rij[data-id="t3"]').count()) === 0);
   await t.screenshot({ path: path.join(OUT, "m1-dagstart.png"), fullPage: true });
   await t.click('[data-ds="later"][data-id="t4"]'); await w(t, 200);

@@ -28,6 +28,7 @@ const INST = { agendas: ["school", "werk", "persoonlijk"], pabo: true, doelgroep
     await ctx.route("https://fonts.**", (r) => r.abort());
     await ctx.addInitScript(([d, i]) => { if (!localStorage.getItem("gezaaid")) { localStorage.setItem("pabo3-kalender-opdrachten-v1", JSON.stringify(d)); localStorage.setItem("digigenda-instellingen-v1", JSON.stringify(i)); localStorage.setItem("gezaaid", "1"); } }, [DATA, INST]);
     const page = await ctx.newPage();
+    await page.emulateMedia({ reducedMotion: "reduce" });   // vaste klok bevriest CSS-animaties
     await page.clock.setFixedTime(NU);
     page.on("pageerror", (e) => fouten.push(viewport.width + ": " + e.message));
     page.on("console", (m) => { if (m.type() === "error" && !/fonts|net::|Failed to load resource/.test(m.text())) fouten.push(m.text()); });
